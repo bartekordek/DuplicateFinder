@@ -1,0 +1,274 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "[LINUX][CMAKE][CREATE]",
+            "type": "shell",
+            "command": "clear && cd Build-Linux && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "[LINUX][BUILD][DEBUG]",
+            "type": "shell",
+            "command": "cmake --build Build-Linux --config DEBUG -j22",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "dependsOn": "[LINUX][CMAKE][CREATE]"
+        },
+        {
+            "label": "[LINUX][BUILD][DEBUG][04_Scrolling_and_the_matrix_stack_refactor]",
+            "type": "shell",
+            "command": "cmake --build Build-Linux --target 04_Scrolling_and_the_matrix_stack_refactor --config DEBUG -j1",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "dependsOn": "[LINUX][CMAKE][CREATE]"
+        },
+        {
+            "label": "[LINUX] CMake + Make debug",
+            "type": "shell",
+            "command": "clear && cd Build-Linux && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug && time make -j12",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[LINUX] Clean CMake + Make debug",
+            "type": "shell",
+            "command": "clear && cd Build-Linux && rm -rfv * && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug && time make -j12",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS][CMAKE][CREATE DIR]",
+            "type": "shell",
+            "command": "if not exist \"Build-Windows\" mkdir \"Build-Windows\"",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gradle"
+            ]
+        },
+        {
+            "label": "[WINDOWS][CMAKE][CREATE]",
+            "type": "shell",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Debug .. -G \"Visual Studio 16 2019\"",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gradle"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn": "[WINDOWS][CMAKE][CREATE DIR]",
+            "options": {
+                "cwd": "Build-Windows"
+            }
+        },
+        {
+            "label": "[WINDOWS] Build All",
+            "type": "shell",
+            "command": "cls & cmake --build Build-Windows --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS] Build All Clean",
+            "type": "shell",
+            "command": "cls & cmake --build Build-Windows --config DEBUG -j16 --clean-first",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS] CMake + Build All ",
+            "type": "shell",
+            "command": "cls && cmake --build Build-Windows --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "dependsOn": "[WINDOWS] CMake create",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS][DEBUG][16_vertex_arrays]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target 16_vertex_arrays --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS][DEBUG][18_textured_vertex_buffers]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target 18_textured_vertex_buffers --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS][DEBUG][18_textured_vertex_buffers_refactor]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target 18_textured_vertex_buffers_refactor --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        }
+    ]
+}

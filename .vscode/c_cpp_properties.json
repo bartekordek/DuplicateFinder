@@ -1,0 +1,51 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/deps/CUL/libcul/inc",
+                "${workspaceFolder}/deps/CUL/libcul/src",
+                "${workspaceFolder}/deps/CUL/libculTests/src",
+                "${workspaceFolder}/deps/CUL/deps/glm",
+                "${workspaceFolder}/deps/CUL/deps/stb",
+                "${workspaceFolder}/deps/CUL/deps/tiny-image/src",
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "_MSC_VER"
+            ],
+            "windowsSdkVersion": "10.0.18362.0",
+            "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.22.27905/bin/Hostx64/x64/cl.exe"
+        },
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/libopenglwrapper/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/libopenglwrapper/src",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/glew/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/GLFW/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/libsdl2wrapper/inc",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/libsdl2wrapper/src",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/SDL2/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/SDL2_image-2.0.3/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/SDL2_ttf-2.0.14/include",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/CUL/libcul/inc",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/CUL/libcul/src",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/CUL/deps/glm",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/CUL/deps/stb",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/CUL/deps/tiny-image/src",
+                "${workspaceFolder}/deps/OpenGLWrapper/deps/SDL2Wrapper/deps/CUL/deps/DevIL-repo/DevIL/include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.22.27905/bin/Hostx64/x64/cl.exe"
+        }
+    ],
+    "version": 4
+}
