@@ -14,7 +14,7 @@ else()
     add_definitions(-Wfatal-errors)
 endif()
 
-include_directories(".")
+include_directories("inc")
 
 file( GLOB_RECURSE SOURCES *.h *.hpp *.cpp *.vert *.frag )
 message( "${EXEC}: ${SOURCES} " )
