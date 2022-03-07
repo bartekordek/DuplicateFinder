@@ -111,7 +111,8 @@
             "xutility": "cpp",
             "pointers": "cpp",
             "charconv": "cpp",
-            "stop_token": "cpp"
+            "stop_token": "cpp",
+            "xmemory0": "cpp"
         }
 	}
 }

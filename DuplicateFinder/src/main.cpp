@@ -15,7 +15,7 @@ int main( int argc, char** argv )
     }
 
     DuplicateFinder df;
-    df.search( searchPath );
+    df.search( searchPath, "Result.txt" );
 
     return 0;
 }

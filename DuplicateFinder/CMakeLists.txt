@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0.0)
 
 get_filename_component( basename ${CMAKE_CURRENT_SOURCE_DIR} NAME )
 project( ${basename} LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(EXEC ${basename})
 
 if (MSVC)
@@ -15,6 +15,8 @@ else()
 endif()
 
 include_directories("inc")
+
+include_directories( SYSTEM "../deps/CUL/deps/sqlite-amalgamation-3340000" )
 
 file( GLOB_RECURSE SOURCES *.h *.hpp *.cpp *.vert *.frag )
 message( "${EXEC}: ${SOURCES} " )
@@ -42,7 +44,7 @@ IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 
-set( DEPENDENCIES cul )
+set( DEPENDENCIES cul AdditionalDeps )
 
 if( MSVC )
     target_link_libraries( ${EXEC} ${DEPENDENCIES} )

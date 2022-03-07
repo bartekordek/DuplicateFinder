@@ -35,3 +35,5 @@ MogeLib/nbproject/private/
 *.pdb
 /FooOpenGL/build
 Build-*
+
+*.db
