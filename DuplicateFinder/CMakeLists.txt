@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0.0)
 
 get_filename_component( basename ${CMAKE_CURRENT_SOURCE_DIR} NAME )
 project( ${basename} LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(EXEC ${basename})
 
 if (MSVC)
@@ -47,6 +47,7 @@ ENDIF()
 set( DEPENDENCIES cul AdditionalDeps )
 
 if( MSVC )
+    target_link_options(${EXEC} PUBLIC "/INCREMENTAL:NO")
     target_link_libraries( ${EXEC} ${DEPENDENCIES} )
 else()
     target_link_libraries( ${EXEC} ${DEPENDENCIES} stdc++fs  )
