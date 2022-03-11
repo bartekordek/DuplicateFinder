@@ -4,9 +4,29 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "[LINUX][CMAKE][CREATE]",
+            "label": "[LINUX][CMAKE][CREATE DIR]",
             "type": "shell",
-            "command": "clear && cd Build-Linux && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug",
+            "command": "mkdir -p Build-Linux",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gradle"
+            ]
+        },
+        {
+            "label": "[LINUX][CMAKE][CREATE][DEBUG]",
+            "type": "shell",
+            "command": "cd Build-Linux;pwd && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -21,7 +41,29 @@
             },
             "problemMatcher": [
                 "$gcc"
-            ]
+            ],
+            "dependsOn": "[LINUX][CMAKE][CREATE DIR]",
+        },
+        {
+            "label": "[LINUX][CMAKE][CREATE][RELEASE]",
+            "type": "shell",
+            "command": "cd Build-Linux;pwd && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Release",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "dependsOn": "[LINUX][CMAKE][CREATE DIR]",
         },
         {
             "label": "[LINUX][BUILD][DEBUG]",
@@ -42,12 +84,12 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "dependsOn": "[LINUX][CMAKE][CREATE]"
+            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]"
         },
         {
-            "label": "[LINUX][BUILD][DEBUG][04_Scrolling_and_the_matrix_stack_refactor]",
+            "label": "[LINUX][BUILD][RELEASE]",
             "type": "shell",
-            "command": "cmake --build Build-Linux --target 04_Scrolling_and_the_matrix_stack_refactor --config DEBUG -j1",
+            "command": "cmake --build Build-Linux --config RELEASE -j22",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -63,47 +105,47 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "dependsOn": "[LINUX][CMAKE][CREATE]"
+            "dependsOn": "[LINUX][CMAKE][CREATE][RELEASE]"
         },
         {
-            "label": "[LINUX] CMake + Make debug",
+            "label": "[LINUX][BUILD][DEBUG][DuplicateFinder]",
             "type": "shell",
-            "command": "clear && cd Build-Linux && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug && time make -j12",
+            "command": "cmake --build Build-Linux --target DuplicateFinder --config DEBUG -j16",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": [
-                "$gcc"
-            ],
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
                 "panel": "dedicated",
-                "showReuseMessage": true,
+                "showReuseMessage": false,
                 "clear": true
-            }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
         },
         {
-            "label": "[LINUX] Clean CMake + Make debug",
+            "label": "[LINUX][BUILD][RELEASE][DuplicateFinder]",
             "type": "shell",
-            "command": "clear && cd Build-Linux && rm -rfv * && cmake .. -G \"Unix Makefiles\" -DCMAKE_BUILD_TYPE=Debug && time make -j12",
+            "command": "cmake --build Build-Linux --target DuplicateFinder --config RELEASE -j16",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": [
-                "$gcc"
-            ],
             "presentation": {
                 "echo": true,
                 "reveal": "always",
                 "focus": false,
                 "panel": "dedicated",
-                "showReuseMessage": true,
+                "showReuseMessage": false,
                 "clear": true
-            }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
         },
         {
             "label": "[WINDOWS][CMAKE][CREATE DIR]",
@@ -153,6 +195,30 @@
             "label": "[WINDOWS][CMAKE][CREATE][RELEASE]",
             "type": "shell",
             "command": "cmake -DCMAKE_BUILD_TYPE=Release .. -G \"Visual Studio 16 2019\"",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gradle"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn": "[WINDOWS][CMAKE][CREATE DIR]",
+            "options": {
+                "cwd": "Build-Windows"
+            }
+        },
+        {
+            "label": "[WINDOWS][CMAKE][CREATE][RELEASE_WITH_DEBUG_INFO]",
+            "type": "shell",
+            "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. -G \"Visual Studio 16 2019\"",
             "group": {
                 "kind": "build",
                 "isDefault": true

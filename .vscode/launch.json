@@ -5,240 +5,46 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "[Windows] Debug 02_Matrices_and_coloring_polygons",
-            "type": "cppvsdbg",
+            "name": "[LINUX][RUN][DEBUG]",
+            "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/02_Matrices_and_coloring_polygons.exe",
-            "cwd": "${workspaceRoot}/02_Matrices_and_coloring_polygons",
-            "symbolSearchPath": "${workspaceRoot}/02_Matrices_and_coloring_polygons",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
+            "program": "${workspaceFolder}/Build-Linux/DuplicateFinder.bin",
+            "args": ["/mnt/d/Mega"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/Build-Linux",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
             ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
+            //"preLaunchTask": "g++ build active file",
+            "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "[Windows] Debug 02_Matrices_and_coloring_polygons_refactor",
-            "type": "cppvsdbg",
+            "name": "[LINUX][RUN][RELEASE]",
+            "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/02_Matrices_and_coloring_polygons_refactor.exe",
-            "cwd": "${workspaceRoot}/02_Matrices_and_coloring_polygons_refactor",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
+            "program": "${workspaceFolder}/Build-Linux/DuplicateFinder.bin",
+            "args": ["/mnt/d/Mega"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/Build-Linux",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                }
             ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
+            //"preLaunchTask": "g++ build active file",
+            "miDebuggerPath": "/usr/bin/gdb"
         },
-        {
-            "name": "[Windows] Debug 05_Texture_mapping_and_pixel_manipulation",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}\\Build-Windows\\Debug\\05_Texture_mapping_and_pixel_manipulation.exe",
-            "cwd": "${workspaceRoot}/runDir",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
-        },
-        {
-            "name": "[Windows] Debug 05_Texture_mapping_and_pixel_manipulation_refactor",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}\\Build-Windows\\Debug\\05_Texture_mapping_and_pixel_manipulation_refactor.exe",
-            "cwd": "${workspaceRoot}/runDir",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            },
-            "preLaunchTask": "[WINDOWS] Build All"
-        },
-        {
-            "name": "[Windows] Debug 06_Loading_a_texture",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}\\Build-Windows\\Debug\\06_Loading_a_texture.exe",
-            "cwd": "${workspaceRoot}/runDir",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            },
-            "preLaunchTask": "[WINDOWS] Build All"
-        },
-        {
-            "name": "[Windows] Debug 06_Loading_a_texture_refactor",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}\\Build-Windows\\Debug\\06_Loading_a_texture_refactor.exe",
-            "cwd": "${workspaceRoot}/runDir",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            },
-            "preLaunchTask": "[WINDOWS] Build All"
-        },
-        {
-            "name": "[Windows] Debug 13_matrix_transformations_refactor",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/13_matrix_transformations_refactor.exe",
-            "cwd": "${workspaceRoot}/13_matrix_transformations_refactor",
-            "symbolSearchPath": "${workspaceRoot}/13_matrix_transformations_refactor",
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
-        },
-        {
-            "name": "[Windows] Debug 16_vertex_arrays",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/16_vertex_arrays.exe",
-            "cwd": "${workspaceRoot}/16_vertex_arrays",
-            "symbolSearchPath": "${workspaceRoot}/16_vertex_arrays",
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
-        },
-        {
-            "name": "[Windows] Debug 16_vertex_arrays_refactor",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/16_vertex_arrays_refactor.exe",
-            "cwd": "${workspaceRoot}/16_vertex_arrays_refactor",
-            "symbolSearchPath": "${workspaceRoot}/16_vertex_arrays_refactor",
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            },
-            "preLaunchTask": "[WINDOWS] Build All"
-        },
-        {
-            "name": "[Windows] Debug 17_vertex_buffer_objects",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}\\Build-Windows\\Debug\\17_vertex_buffer_objects.exe",
-            "cwd": "${workspaceRoot}/runDir",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            },
-            "preLaunchTask": "[WINDOWS] Build All"
-        },
-        {
-            "name": "[Windows] Debug 17_vertex_buffer_objects_refactor",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/17_vertex_buffer_objects_refactor.exe",
-            "cwd": "${workspaceRoot}/runDir",
-            "symbolSearchPath": "${workspaceRoot}/runDir",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
-        },
-        {
-            "name": "[Windows] Debug 18_textured_vertex_buffers",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/18_textured_vertex_buffers.exe",
-            "cwd": "${workspaceRoot}/18_textured_vertex_buffers",
-            "symbolSearchPath": "${workspaceRoot}/18_textured_vertex_buffers",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            }
-        },
-        {
-            "name": "[Windows] Debug 18_textured_vertex_buffers_refactor",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/18_textured_vertex_buffers_refactor.exe",
-            "cwd": "${workspaceRoot}/18_textured_vertex_buffers_refactor",
-            "symbolSearchPath": "${workspaceRoot}/18_textured_vertex_buffers_refactor",
-            "args": [
-                "-w",
-                "1680",
-                "-h",
-                "900"
-            ],
-            "externalConsole": false,
-            "logging": {
-                "moduleLoad": false,
-                "trace": true,
-            },
-            "preLaunchTask": "[WINDOWS][DEBUG][18_textured_vertex_buffers_refactor]"
-        }
-        //18_textured_vertex_buffers_refactor
     ]
 }
