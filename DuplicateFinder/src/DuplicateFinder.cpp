@@ -4,6 +4,7 @@
 #include "CUL/Filesystem/Path.hpp"
 #include "CUL/IMPORT_sqlite3.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
+#include "CUL/ITimer.hpp"
 
 DuplicateFinder* DuplicateFinder::s_instance = nullptr;
 
@@ -23,7 +24,7 @@ void DuplicateFinder::initDb()
     std::string sqlQuery = "SELECT * \
     FROM FILES";
 
-    auto callback = []( void* NotUsed, int argc, char** argv, char** azColName )
+    auto callback = []( void* , int , char** , char** )
     {
         //DuplicateFinder::s_instance->callback(NotUsed, argc, argv, azColName);
         return 0;
@@ -47,79 +48,7 @@ void DuplicateFinder::initDb()
     }
 }
 
-CUL::String DuplicateFinder::getModTimeFromDb( const CUL::String& filePath )
-{
-    getParametersFromDb(filePath);
-    CUL::String result;
-    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
-    auto it = m_filesFromDb.find( filePath );
-    if( it != m_filesFromDb.end() )
-    {
-        result = it->second.modTime;
-    }
-    return result;
-}
-
-
-void DuplicateFinder::getParametersFromDb( const CUL::String& filePath )
-{
-    CUL::String filePathNormalized = filePath;
-    filePathNormalized.replace( "./", "" );
-    filePathNormalized.removeAll( '\0' );
-    std::string sqlQuery =
-        std::string ("SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES WHERE PATH='" ) +
-        filePathNormalized.string() + "';";
-    char* zErrMsg = nullptr;
-
-    typedef int ( *SQLiteCallback )( void* NotUsed, int argc, char** argv, char** azColName );
-
-    auto callback = []( void* NotUsed, int argc, char** argv, char** azColName )
-    {
-        //DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
-        std::vector<std::string> values;
-        for( int i = 0; i < argc; ++i )
-        {
-            std::string value = argv[i];
-            values.push_back( value );
-        }
-        s_instance->addFileFromDb( values[0], values[1], values[2], values[3] );
-        return 0;
-    };
-
-    std::lock_guard<std::mutex> sqliteLock( m_sqliteMtx );
-    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
-
-    if( rc != SQLITE_OK )
-    {
-        CUL::Assert::simple( false, "DB ERROR!" );
-    }
-}
-
-const CUL::String& DuplicateFinder::getModTimeFromDbImpl( const CUL::String& filePath )
-{
-    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
-    m_culInterface->getLogger()->log( "getModTimeFromDbImpl: " + filePath );
-    const auto it = m_filesFromDb.find(filePath);
-    if( it == m_filesFromDb.end() )
-    {
-        return m_empty;
-    }
-
-    return it->second.modTime;
-}
-
-
-void DuplicateFinder::addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime )
-{
-    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
-    FileDb fdb;
-    fdb.size = size;
-    fdb.md5 = md;
-    fdb.modTime = modTime;
-    m_filesFromDb[path] = fdb;
-}
-
-int DuplicateFinder::callback( void* NotUsed, int argc, char** argv, char** azColName )
+int DuplicateFinder::callback( void*, int argc, char** argv, char** azColName )
 {
     m_culInterface->getLogger()->log( "\n\n---------------------------------------------------------------------------------" );
     for( int i = 0; i < argc; ++i )
@@ -207,11 +136,16 @@ void DuplicateFinder::search( const std::string& path, const std::string& summar
 
     delete file;
 
+    printCurrentMean();
+
     m_culInterface->getLogger()->log( "\nDONE.");
 }
 
 void DuplicateFinder::addFile( const CUL::String& path )
 {
+    CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer();
+    m_frameTimer->start();
+
     std::unique_ptr<CUL::FS::IFile> file;
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
 
@@ -240,6 +174,7 @@ void DuplicateFinder::addFile( const CUL::String& path )
     {
         std::lock_guard<std::mutex> lock( m_duplicatesMtx );
 
+        std::lock_guard<std::mutex> lockMap( m_filesPathsMapMtx );
         const auto it = m_filesPathsMap.find( sizeBytes );
         if( it != m_filesPathsMap.end() )
         {
@@ -267,6 +202,80 @@ void DuplicateFinder::addFile( const CUL::String& path )
     float tasksLeft = (float)getTasksLeft();
     float percentage = 100.f * ( 1 - ( tasksLeft / m_filesCount ) );
     m_culInterface->getLogger()->log( CUL::String(percentage) + "%, " + CUL::String( "Path: " ) + path + " Done." );
+    m_frameTimer->stop();
+    const auto& elapsed = m_frameTimer->getElapsed();
+    const unsigned elapsedUi = elapsed.getMs();
+    m_fileAddTasksDuration.push_back( elapsedUi );
+    delete m_frameTimer;
+    printCurrentMean();
+}
+
+CUL::String DuplicateFinder::getModTimeFromDb( const CUL::String& filePath )
+{
+    getParametersFromDb( filePath );
+    CUL::String result;
+    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
+    auto it = m_filesFromDb.find( filePath );
+    if( it != m_filesFromDb.end() )
+    {
+        result = it->second.modTime;
+    }
+    return result;
+}
+
+void DuplicateFinder::printCurrentMean()
+{
+    float sum = 0.f;
+    std::lock_guard<std::mutex> lock( m_fileAddTasksDurationMtx );
+    size_t vSize = m_fileAddTasksDuration.size();
+    for( size_t i = 0; i < vSize; ++i )
+    {
+        sum += m_fileAddTasksDuration[i];
+    }
+
+    float mean = sum / vSize;
+
+    m_culInterface->getLogger()->log( CUL::String( "Mean: " ) + CUL::String( mean ) );
+}
+
+void DuplicateFinder::getParametersFromDb( const CUL::String& filePath )
+{
+    CUL::String filePathNormalized = filePath;
+    filePathNormalized.replace( "./", "" );
+    filePathNormalized.removeAll( '\0' );
+    std::string sqlQuery =
+        std::string( "SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES WHERE PATH='" ) + filePathNormalized.string() + "';";
+    char* zErrMsg = nullptr;
+
+    auto callback = []( void*, int argc, char** argv, char** ) {
+        // DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
+        std::vector<CUL::String> values;
+        for( int i = 0; i < argc; ++i )
+        {
+            CUL::String value = argv[i];
+            values.push_back( value );
+        }
+        s_instance->addFileFromDb( values[0], values[1], values[2], values[3] );
+        return 0;
+    };
+
+    std::lock_guard<std::mutex> sqliteLock( m_sqliteMtx );
+    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
+
+    if( rc != SQLITE_OK )
+    {
+        CUL::Assert::simple( false, "DB ERROR!" );
+    }
+}
+
+void DuplicateFinder::addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime )
+{
+    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
+    FileDb fdb;
+    fdb.size = size;
+    fdb.md5 = md;
+    fdb.modTime = modTime;
+    m_filesFromDb[path] = fdb;
 }
 
 void DuplicateFinder::addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime )
@@ -280,7 +289,7 @@ void DuplicateFinder::addFileToDb( MD5Value md5, const CUL::String& filePath, co
                            "', '" + modTime + "');";
 
     char* zErrMsg = nullptr;
-    auto callback = []( void* NotUsed, int argc, char** argv, char** azColName )
+    auto callback = []( void*, int , char** , char** )
     {
        // DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
         return 0;
@@ -298,7 +307,7 @@ void DuplicateFinder::workerThreadMethod()
 {
     while( getTasksLeft() > 0 )
     {
-        auto task = getTask();
+        std::function<void()> task = getTask();
         task();
     }
 }

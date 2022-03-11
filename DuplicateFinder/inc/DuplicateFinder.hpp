@@ -48,16 +48,15 @@ private:
     CUL::String getModTimeFromDb( const CUL::String& filePath );
     void addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime );
     void getParametersFromDb( const CUL::String& filePath );
-
-    const CUL::String& getModTimeFromDbImpl( const CUL::String& filePath );
-    
-    
+    void printCurrentMean();
 
     std::unique_ptr<CUL::CULInterface> m_culInterface;
     size_t m_maxThreadCount =  10;
 
     std::mutex m_duplicatesMtx;
     std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
+
+    std::mutex m_filesPathsMapMtx;
     std::map<FileSize, Value> m_filesPathsMap;
 
 
@@ -81,4 +80,7 @@ private:
 
     struct sqlite3* m_db = nullptr;
     CUL::String m_empty;
+
+    std::mutex m_fileAddTasksDurationMtx;
+    std::vector<unsigned> m_fileAddTasksDuration;
 };
