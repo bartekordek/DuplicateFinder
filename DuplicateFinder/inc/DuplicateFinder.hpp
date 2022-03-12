@@ -23,6 +23,7 @@ public:
     static DuplicateFinder* s_instance;
 
     void addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime );
+    void parseArguments(int argc, char** argv);
 
     ~DuplicateFinder();
 protected:

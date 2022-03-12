@@ -278,6 +278,11 @@ void DuplicateFinder::addFileFromDb( const CUL::String& path, const CUL::String&
     m_filesFromDb[path] = fdb;
 }
 
+void DuplicateFinder::parseArguments( int argc, char** argv )
+{
+    m_culInterface->get
+}
+
 void DuplicateFinder::addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime )
 {
     CUL::String result;
