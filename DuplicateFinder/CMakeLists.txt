@@ -44,7 +44,7 @@ IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 
-set( DEPENDENCIES cul AdditionalDeps )
+set( DEPENDENCIES cul_dynamic AdditionalDeps )
 
 if( MSVC )
     target_link_options(${EXEC} PUBLIC "/INCREMENTAL:NO")

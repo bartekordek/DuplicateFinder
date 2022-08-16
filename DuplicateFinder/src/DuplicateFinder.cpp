@@ -5,6 +5,7 @@
 #include "CUL/IMPORT_sqlite3.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/ITimer.hpp"
+#include "CUL/Filesystem/FileFactory.hpp"
 
 DuplicateFinder* DuplicateFinder::s_instance = nullptr;
 
@@ -280,7 +281,7 @@ void DuplicateFinder::addFileFromDb( const CUL::String& path, const CUL::String&
 
 void DuplicateFinder::parseArguments( int argc, char** argv )
 {
-    m_culInterface->get
+    m_consoleUtilities.setArgs( argc, argv );
 }
 
 void DuplicateFinder::addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime )

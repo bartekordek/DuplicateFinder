@@ -301,29 +301,9 @@
             }
         },
         {
-            "label": "[WINDOWS][DEBUG][18_textured_vertex_buffers]",
+            "label": "[WINDOWS][DEBUG][DuplicateFinder]",
             "type": "shell",
-            "command": "cmake --build Build-Windows --target 18_textured_vertex_buffers --config DEBUG -j16",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated",
-                "showReuseMessage": true,
-                "clear": true
-            }
-        },
-        {
-            "label": "[WINDOWS][DEBUG][18_textured_vertex_buffers_refactor]",
-            "type": "shell",
-            "command": "cmake --build Build-Windows --target 18_textured_vertex_buffers_refactor --config DEBUG -j16",
+            "command": "cmake --build Build-Windows --target DuplicateFinder --config DEBUG -j16",
             "group": {
                 "kind": "build",
                 "isDefault": true

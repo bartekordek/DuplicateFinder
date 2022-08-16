@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CUL/Filesystem/Path.hpp"
+#include "CUL/GenericUtils/ConsoleUtilities.hpp"
+
 #include "CUL/STL_IMPORTS/STD_memory.hpp"
 #include "CUL/STL_IMPORTS/STD_thread.hpp"
 #include "CUL/STL_IMPORTS/STD_map.hpp"
@@ -84,4 +86,6 @@ private:
 
     std::mutex m_fileAddTasksDurationMtx;
     std::vector<unsigned> m_fileAddTasksDuration;
+
+    CUL::GUTILS::ConsoleUtilities m_consoleUtilities;
 };
