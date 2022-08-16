@@ -27,9 +27,15 @@ public:
     void addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime );
     void parseArguments(int argc, char** argv);
 
+    void addForCheckForDeletionList( const CUL::String& path );
+
     ~DuplicateFinder();
 protected:
 private:
+    void removeDeletedFilesFromDB();
+    void getList();
+    void removeFileFromDB( const CUL::String& path );
+
     struct FileDb
     {
         CUL::String size;
@@ -38,7 +44,7 @@ private:
     };
     using FileSize = CUL::String;
     using MD5Value = CUL::String;
-    using Value = std::map<MD5Value, CUL::FS::Path>;
+    using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
 
     void addFile( const CUL::String& path );
 
@@ -88,4 +94,6 @@ private:
     std::vector<unsigned> m_fileAddTasksDuration;
 
     CUL::GUTILS::ConsoleUtilities m_consoleUtilities;
+
+    std::vector<CUL::String> m_deletionList;
 };

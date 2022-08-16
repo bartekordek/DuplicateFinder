@@ -66,6 +66,8 @@ void DuplicateFinder::search( const std::string& path, const std::string& summar
 {
     m_culInterface->getLogger()->log( CUL::String( "Start search." ) );
 
+    removeDeletedFilesFromDB();
+
     auto culFF = m_culInterface->getFS();
 
     std::vector<CUL::FS::Path> filesInDir = culFF->ListAllFiles( path );
@@ -114,7 +116,46 @@ void DuplicateFinder::search( const std::string& path, const std::string& summar
 
     auto file = m_culInterface->getFF()->createRegularFileRawPtr( CUL::FS::Path( filePath ) );
 
-    CUL::String text;
+
+    CUL::String text = CUL::String( "Files: " );
+    m_culInterface->getLogger()->log( text );
+    file->addLine( text );
+
+    for( const auto& sameSizeGroup : m_filesPathsMap )
+    {
+        text = CUL::String( "\tSize: " ) + CUL::String( sameSizeGroup.first );
+        m_culInterface->getLogger()->log( text );
+        file->addLine( text );
+        for( const auto& sameMD5Group : sameSizeGroup.second )
+        {
+            text = CUL::String( "\t\tMD5: " ) + CUL::String( sameMD5Group.first );
+            m_culInterface->getLogger()->log( text );
+            file->addLine( text );
+
+            bool duplicatesFound = false;
+            if( sameMD5Group.second.size() > 1 )
+            {
+                text = CUL::String( "\t\tPossible Duplicates");
+                duplicatesFound = true;
+            }
+
+            for( const auto& path : sameMD5Group.second )
+            {
+                text = CUL::String( "\t\t\tFile: " ) + CUL::String( path );
+                m_culInterface->getLogger()->log( text );
+                file->addLine( text );
+
+                if( duplicatesFound )
+                {
+                    m_duplicates[sameSizeGroup.first] = std::map<MD5Value, std::set<CUL::FS::Path>>();
+                    std::map<MD5Value, std::set<CUL::FS::Path>>& md5PathList = m_duplicates[sameSizeGroup.first];
+                    md5PathList[sameMD5Group.first].insert( path );
+                }
+            }
+        }
+    }
+
+    
     for( const auto& sizesGroup : m_duplicates )
     {
         text = CUL::String( "Sizes: " ) + CUL::String( sizesGroup.first );
@@ -140,6 +181,22 @@ void DuplicateFinder::search( const std::string& path, const std::string& summar
     printCurrentMean();
 
     m_culInterface->getLogger()->log( "\nDONE.");
+}
+
+void DuplicateFinder::removeDeletedFilesFromDB()
+{
+    getList();
+
+    const size_t deletionListSize = m_deletionList.size();
+
+    for( size_t i = 0; i < deletionListSize; ++i )
+    {
+        CUL::FS::Path path = m_deletionList[i];
+        if( !path.exists() )
+        {
+            removeFileFromDB( path );
+        }
+    }
 }
 
 void DuplicateFinder::addFile( const CUL::String& path )
@@ -177,26 +234,16 @@ void DuplicateFinder::addFile( const CUL::String& path )
 
         std::lock_guard<std::mutex> lockMap( m_filesPathsMapMtx );
         const auto it = m_filesPathsMap.find( sizeBytes );
-        if( it != m_filesPathsMap.end() )
+        if( it == m_filesPathsMap.end() )
         {
-            std::map<MD5Value, CUL::FS::Path>& sameSizeFiles = it->second;
-            auto md5It = sameSizeFiles.find( md5 );
-            if( md5It != sameSizeFiles.end() )
-            {
-                CUL::String oldFile = md5It->second.getPath();
-                m_duplicates[sizeBytes][md5].insert( oldFile );
-                m_duplicates[sizeBytes][md5].insert( path );
-            }
-            else
-            {
-                sameSizeFiles[md5] = path;
-            }
+            Value sameSizeFiles;
+            sameSizeFiles[md5].push_back( path );
+            m_filesPathsMap[sizeBytes] = sameSizeFiles;
         }
         else
         {
-            Value sameSizeFiles;
-            sameSizeFiles[md5] = path;
-            m_filesPathsMap[sizeBytes] = sameSizeFiles;
+            std::map<MD5Value, std::vector<CUL::FS::Path>>& sameSizeFiles = it->second;
+            sameSizeFiles[md5].push_back( path );
         }
     }
 
@@ -239,6 +286,31 @@ void DuplicateFinder::printCurrentMean()
     m_culInterface->getLogger()->log( CUL::String( "Mean: " ) + CUL::String( mean ) );
 }
 
+void DuplicateFinder::getList()
+{
+    std::string sqlQuery =
+        std::string( "SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES" );
+    auto callback = []( void*, int argc, char** argv, char** )
+    {
+        s_instance->addForCheckForDeletionList( argv[0] );
+        return 0;
+    };
+
+    std::lock_guard<std::mutex> sqliteLock( m_sqliteMtx );
+    char* zErrMsg = nullptr;
+    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
+
+    if( rc != SQLITE_OK )
+    {
+        CUL::Assert::simple( false, "DB ERROR!" );
+    }
+}
+
+void DuplicateFinder::addForCheckForDeletionList( const CUL::String& path )
+{
+    m_deletionList.push_back( path );
+}
+
 void DuplicateFinder::getParametersFromDb( const CUL::String& filePath )
 {
     CUL::String filePathNormalized = filePath;
@@ -249,7 +321,6 @@ void DuplicateFinder::getParametersFromDb( const CUL::String& filePath )
     char* zErrMsg = nullptr;
 
     auto callback = []( void*, int argc, char** argv, char** ) {
-        // DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
         std::vector<CUL::String> values;
         for( int i = 0; i < argc; ++i )
         {
@@ -277,6 +348,25 @@ void DuplicateFinder::addFileFromDb( const CUL::String& path, const CUL::String&
     fdb.md5 = md;
     fdb.modTime = modTime;
     m_filesFromDb[path] = fdb;
+}
+
+void DuplicateFinder::removeFileFromDB( const CUL::String& path )
+{
+    std::string sqlQuery = std::string( "DELETE FROM FILES WHERE PATH='" ) + path.string() + "';";
+
+    char* zErrMsg = nullptr;
+    auto callback = []( void*, int, char**, char** )
+    {
+        // DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
+        return 0;
+    };
+    std::lock_guard<std::mutex> sqliteLock( m_sqliteMtx );
+    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
+
+    if( rc != SQLITE_OK )
+    {
+        CUL::Assert::simple( false, "DB ERROR!" );
+    }
 }
 
 void DuplicateFinder::parseArguments( int argc, char** argv )
