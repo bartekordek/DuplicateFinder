@@ -290,7 +290,7 @@ void DuplicateFinder::getList()
 {
     std::string sqlQuery =
         std::string( "SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES" );
-    auto callback = []( void*, int argc, char** argv, char** )
+    auto callback = []( void*, int /* argc */, char** argv, char** )
     {
         s_instance->addForCheckForDeletionList( argv[0] );
         return 0;
