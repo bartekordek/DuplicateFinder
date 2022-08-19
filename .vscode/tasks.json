@@ -20,7 +20,7 @@
                 "clear": true
             },
             "problemMatcher": [
-                "$gradle"
+                "$msCompile"
             ]
         },
         {
@@ -164,7 +164,7 @@
                 "clear": true
             },
             "problemMatcher": [
-                "$gradle"
+                "$msCompile"
             ]
         },
         {
@@ -176,7 +176,7 @@
                 "isDefault": true
             },
             "problemMatcher": [
-                "$gradle"
+                "$msCompile"
             ],
             "presentation": {
                 "echo": true,
@@ -200,7 +200,7 @@
                 "isDefault": true
             },
             "problemMatcher": [
-                "$gradle"
+                "$msCompile"
             ],
             "presentation": {
                 "echo": true,
@@ -224,7 +224,7 @@
                 "isDefault": true
             },
             "problemMatcher": [
-                "$gradle"
+                "$msCompile"
             ],
             "presentation": {
                 "echo": true,
@@ -240,67 +240,6 @@
             }
         },
         {
-            "label": "[WINDOWS] Build All",
-            "type": "shell",
-            "command": "cls & cmake --build Build-Windows --config DEBUG -j16",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated",
-                "showReuseMessage": true,
-                "clear": true
-            }
-        },
-        {
-            "label": "[WINDOWS] Build All Clean",
-            "type": "shell",
-            "command": "cls & cmake --build Build-Windows --config DEBUG -j16 --clean-first",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated",
-                "showReuseMessage": true,
-                "clear": true
-            }
-        },
-        {
-            "label": "[WINDOWS] CMake + Build All ",
-            "type": "shell",
-            "command": "cls && cmake --build Build-Windows --config DEBUG -j16",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "dependsOn": "[WINDOWS] CMake create",
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated",
-                "showReuseMessage": true,
-                "clear": true
-            }
-        },
-        {
             "label": "[WINDOWS][DEBUG][DuplicateFinder]",
             "type": "shell",
             "command": "cmake --build Build-Windows --target DuplicateFinder --config DEBUG -j16",
@@ -310,6 +249,47 @@
             },
             "problemMatcher": [
                 "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            }
+        },
+        {
+            "label": "[WINDOWS][DEBUG][DuplicateFinderGUI]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target DuplicateFinderGUI --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn":"[WINDOWS][CMAKE][CREATE][DEBUG]"
+        },
+        {
+            "label": "[LINUX][DEBUG][DuplicateFinderGUI]",
+            "type": "shell",
+            "command": "cmake --build Build-Linux --target DuplicateFinderGUI --config DEBUG -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$gcc"
             ],
             "presentation": {
                 "echo": true,

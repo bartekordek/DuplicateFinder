@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "[LINUX][RUN][DEBUG]",
+            "name": "[LINUX][RUN][DEBUG][DuplicateFinder]",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Build-Linux/DuplicateFinder.bin",
@@ -45,6 +45,26 @@
             ],
             //"preLaunchTask": "g++ build active file",
             "miDebuggerPath": "/usr/bin/gdb"
+        },
+        {
+            "name": "[RUN][WINDOWS][DuplicateFinderGUI]",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Build-Windows/Debug/DuplicateFinderGUI.exe",
+            "cwd": "${workspaceFolder}/DuplicateFinderGUI",
+            "symbolSearchPath": "${workspaceFolder}/Build-Windows/Debug/",
+            "args": [
+                "-w",
+                "1680",
+                "-h",
+                "900"
+            ],
+            "externalConsole": false,
+            "logging": {
+                "moduleLoad": false,
+                "trace": true,
+            },
+            "preLaunchTask": "[WINDOWS][DEBUG][DuplicateFinderGUI]"
         },
     ]
 }

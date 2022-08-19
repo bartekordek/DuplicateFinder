@@ -155,7 +155,6 @@ void DuplicateFinder::search( const std::string& path, const std::string& summar
         }
     }
 
-    
     for( const auto& sizesGroup : m_duplicates )
     {
         text = CUL::String( "Sizes: " ) + CUL::String( sizesGroup.first );
