@@ -208,22 +208,42 @@ void App::guiIteration()
 
     ImGui::SetWindowSize( { targetWidht, targetHeight } );
 
-    if( ImGui::Button("Run") )
+    static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+
+    if( ImGui::BeginTable( "split", 3, flags ) )
     {
-        m_logger->log( "RUN!" );
-        m_searchThread = std::thread( &App::search, this, "D:/GuglDrajwu", "Result.txt" );
+        ImGui::TableSetupColumn( "", ImGuiTableColumnFlags_WidthStretch, 16.f );
+        static float width = 270.f;
+        ImGui::TableSetupColumn( "Done:", ImGuiTableColumnFlags_WidthStretch, width );
+        ImGui::TableSetupColumn( "Current:", ImGuiTableColumnFlags_WidthStretch, width );
+
+        //ImGui::TableHeadersRow();
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex( 0 );
+        if( ImGui::Button( "Run" ) )
+        {
+            m_logger->log( "RUN!" );
+            m_searchThread = std::thread( &App::search, this, "D:/GuglDrajwu", "Result.txt" );
+        }
+
+        ImGui::TableSetColumnIndex( 1 );
+        ImGui::Text( m_doneText.cStr(), 0 );
+
+        ImGui::TableSetColumnIndex( 2 );
+        ImGui::Text( m_currentFileText.cStr(), 0 );
+
+        ImGui::EndTable();
     }
 
-    static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
-                                   ImGuiTableFlags_Hideable | ImGuiTableFlags_Resizable;
-    if( ImGui::BeginTable( "table1", 3, flags ) )
+
+    if( false &&  ImGui::BeginTable( "table1", 3, flags ) )
     {
         ImGui::TableSetupColumn( "Path", ImGuiTableColumnFlags_None, 200.f );
         ImGui::TableSetupColumn( "MD5", ImGuiTableColumnFlags_None, 200.f );
         ImGui::TableSetupColumn( "Size", ImGuiTableColumnFlags_None, 200.f );
 
         ImGui::TableHeadersRow();
-
         {
             std::lock_guard<std::mutex> lockGuard( m_allFilesMtx );
             const size_t filesSize = m_allFiles.size();
@@ -243,10 +263,34 @@ void App::guiIteration()
                 ImGui::TableSetColumnIndex( 2 );
                 ImGui::Text( fileDb.size.cStr(), 0 );
             }
+
+            ImGui::EndTable();
         }
+    }
 
 
-        ImGui::EndTable();
+    for( const auto& [filesize, value] : m_filesPathsMap )
+    {
+        const size_t md5Count = value.size();
+        const CUL::String m_fileSizeString = "Size: " + filesize + ", MD5 count: " + CUL::String( (int)md5Count );
+        if( ImGui::TreeNode( m_fileSizeString.cStr() ) )
+        {
+            for( const auto& [md5value, paths] : value )
+            {
+                const size_t filesCount = paths.size();
+                const CUL::String m_md5valueString = "MD5: " + md5value + ", files count: " + CUL::String( (int)filesCount );
+                if( ImGui::TreeNode(m_md5valueString.cStr()) )
+                {
+                    for( const auto& fsPath : paths )
+                    {
+                        ImGui::BulletText( fsPath.getPath().cStr() );
+                        ImGui::TreePop();
+                    }
+                    
+                }
+            }
+            ImGui::TreePop();
+        }
     }
 
     ImGui::End();
@@ -510,6 +554,8 @@ void App::removeFileFromDB( const CUL::String& path )
 
 void App::addFile( const CUL::String& path )
 {
+    m_currentFileText = "Current file: " + path + ".";
+
     CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer();
     m_frameTimer->start();
 
@@ -558,7 +604,10 @@ void App::addFile( const CUL::String& path )
 
     float tasksLeft = (float)getTasksLeft();
     float percentage = 100.f * ( 1 - ( tasksLeft / m_filesCount ) );
-    m_culInterface->getLogger()->log( CUL::String( percentage ) + "%, " + CUL::String( "Path: " ) + path + " Done." );
+    const CUL::String logText = CUL::String( percentage ) + " done. " + CUL::String( "Path: " ) + path + " Done.";
+
+    m_doneText = logText;
+    m_culInterface->getLogger()->log( logText );
     m_frameTimer->stop();
     const auto& elapsed = m_frameTimer->getElapsed();
     const unsigned elapsedUi = elapsed.getMs();
@@ -577,7 +626,7 @@ void App::addFile( const CUL::String& path )
     std::sort( m_allFiles.begin(), m_allFiles.end(),
                []( const FileDb& fdb1, const FileDb& fdb2 )
                {
-                   return fdb1.md5 > fdb2.md5;
+                   return fdb1.md5 < fdb2.md5;
                } );
 }
 

@@ -133,4 +133,7 @@ private:
     std::vector<FileDb> m_allFiles;
 
     std::thread m_searchThread;
+
+    CUL::String m_doneText;
+    CUL::String m_currentFileText;
 };
