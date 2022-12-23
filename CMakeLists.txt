@@ -19,5 +19,6 @@ set( DUP_FIND_RUN_DIR ${DUP_FIND_ROOT}/runDir )
 set( DUP_FIND_DEPS ${DUP_FIND_ROOT}/deps )
 
 add_subdirectory( deps/GameEngine )
+add_subdirectory(deps/nativefiledialog-extended)
 add_subdirectory( DuplicateFinder )
 add_subdirectory( DuplicateFinderGUI )

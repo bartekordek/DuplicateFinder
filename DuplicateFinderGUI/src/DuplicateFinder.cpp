@@ -13,8 +13,13 @@
 #include "CUL/Filesystem/FileFactory.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/GenericUtils/ConsoleUtilities.hpp"
+#include "CUL/Threading/ThreadUtils.hpp"
 
 #include "CUL/STL_IMPORTS/STD_future.hpp"
+#include "CUL/STL_IMPORTS/STD_codecvt.hpp"
+
+#define NFD_NATIVE
+#include "nfd.h"
 
 
 App* App::s_instance = nullptr;
@@ -53,6 +58,7 @@ void App::onInit()
 
     initDb();
 
+    m_currentFiles.resize( m_maxThreadCount );
     m_thread.run();
 }
 
@@ -190,6 +196,12 @@ void App::customFrame()
 
 }
 
+std::string wstring_to_utf8( const std::wstring& str )
+{
+    std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
+    return myconv.to_bytes( str );
+}
+
 void App::guiIteration()
 {
     auto context = m_oglw->getGuiContext();
@@ -208,6 +220,37 @@ void App::guiIteration()
 
     ImGui::SetWindowSize( { targetWidht, targetHeight } );
 
+    ImGui::Text( "Dirs to check:" );
+    if( ImGui::Button( "+" ) )
+    {
+        addSearchDir();
+    }
+
+    ImGui::SameLine();
+
+    if( ImGui::Button( "-" ) )
+    {
+        removeDir();
+    }
+
+    const size_t pathsCount = m_searchPaths.size();
+    if( pathsCount > 0 )
+    {
+        for( size_t i = 0; i < pathsCount; ++i )
+        {
+            ImGui::Text( m_searchPaths[i].cStr() );
+        }
+    }
+
+    if( ImGui::Button( "Output file" ) )
+    {
+        chooseResultFile();
+    }
+
+    ImGui::SameLine();
+
+    ImGui::Text( m_outputFile.cStr() );
+
     static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
 
     if( ImGui::BeginTable( "split", 3, flags ) )
@@ -217,14 +260,18 @@ void App::guiIteration()
         ImGui::TableSetupColumn( "Done:", ImGuiTableColumnFlags_WidthStretch, width );
         ImGui::TableSetupColumn( "Current:", ImGuiTableColumnFlags_WidthStretch, width );
 
-        //ImGui::TableHeadersRow();
-
         ImGui::TableNextRow();
         ImGui::TableSetColumnIndex( 0 );
         if( ImGui::Button( "Run" ) )
         {
             m_logger->log( "RUN!" );
-            m_searchThread = std::thread( &App::search, this, "D:/GuglDrajwu", "Result.txt" );
+
+            if( m_searchThread.joinable() )
+            {
+                m_searchThread.join();
+            }
+
+            m_searchThread = std::thread( &App::search, this );
         }
 
         ImGui::TableSetColumnIndex( 1 );
@@ -236,6 +283,17 @@ void App::guiIteration()
         ImGui::EndTable();
     }
 
+    if( m_searchStarted )
+    {
+        for( size_t i = 0; i < m_maxThreadCount; ++i )
+        {
+            const CUL::String currentFileText = "CURRENT FILE ON " + CUL::String( (int)i ) + CUL::String( " " ) + m_currentFiles[i];
+
+            const auto someString = wstring_to_utf8( currentFileText.getString() );
+
+            ImGui::TextUnformatted( someString.c_str() );
+        }
+    }
 
     if( false &&  ImGui::BeginTable( "table1", 3, flags ) )
     {
@@ -272,28 +330,98 @@ void App::guiIteration()
     for( const auto& [filesize, value] : m_filesPathsMap )
     {
         const size_t md5Count = value.size();
-        const CUL::String m_fileSizeString = "Size: " + filesize + ", MD5 count: " + CUL::String( (int)md5Count );
-        if( ImGui::TreeNode( m_fileSizeString.cStr() ) )
+        const CUL::String m_fileSizeString = "Size: " + CUL::String( filesize ) + ", MD5 count: " + CUL::String( (int)md5Count );
+
+        bool show = false;
+        for( const auto& [md5value, paths] : value )
+        {
+            if( paths.size() > 1 )
+            {
+                show = true;
+            }
+        }
+
+        if( show && ImGui::TreeNode( m_fileSizeString.cStr() ) )
         {
             for( const auto& [md5value, paths] : value )
             {
                 const size_t filesCount = paths.size();
-                const CUL::String m_md5valueString = "MD5: " + md5value + ", files count: " + CUL::String( (int)filesCount );
-                if( ImGui::TreeNode(m_md5valueString.cStr()) )
+                if( filesCount > 1 )
                 {
-                    for( const auto& fsPath : paths )
+                    const CUL::String m_md5valueString = "MD5: " + md5value + ", files count: " + CUL::String( (int) filesCount );
+                    if( ImGui::TreeNode( m_md5valueString.cStr() ) )
                     {
-                        ImGui::BulletText( fsPath.getPath().cStr() );
+                        for( const auto& fsPath : paths )
+                        {
+                            ImGui::BulletText( fsPath.getPath().cStr() );
+                        }
                         ImGui::TreePop();
                     }
-                    
                 }
+                
             }
             ImGui::TreePop();
         }
+        //
     }
 
     ImGui::End();
+}
+
+void App::addSearchDir()
+{
+    NFD_Init();
+
+    nfdchar_t* outPath = nullptr;
+    nfdfilteritem_t filterItem = {};
+    nfdresult_t result = NFD_PickFolder( &outPath, nullptr );
+    if( result == NFD_OKAY )
+    {
+        CUL::String path = outPath;
+        m_searchPaths.push_back( path );
+        NFD_FreePath( outPath );
+    }
+    else if( result == NFD_CANCEL )
+    {
+    }
+    else
+    {
+    }
+
+    NFD_Quit();
+
+
+    m_logger->log( "found?" );
+}
+
+void App::removeDir()
+{
+    m_searchPaths.pop_back();
+}
+
+void App::chooseResultFile()
+{
+    NFD_Init();
+
+    nfdchar_t* outPath = nullptr;
+    nfdfilteritem_t filter = { L"*.txt", L"Text file" };
+    nfdresult_t result = NFD_SaveDialog( &outPath, &filter, 1, nullptr, nullptr );
+    if( result == NFD_OKAY )
+    {
+        m_outputFile = outPath;
+        NFD_FreePath( outPath );
+    }
+    else if( result == NFD_CANCEL )
+    {
+    }
+    else
+    {
+    }
+
+    NFD_Quit();
+
+
+    m_logger->log( "found?" );
 }
 
 void App::onMouseEvent( const SDL2W::MouseData& mouseData )
@@ -359,30 +487,56 @@ glm::vec3 App::moveOnSphere( float yaw, float pitch, float /*row*/, float rad )
     return result;
 }
 
-void App::search( const std::string& path, const std::string& summaryFilePath )
+void App::search()
 {
     m_culInterface->getLogger()->log( CUL::String( "Start search." ) );
+    m_searchStarted = true;
 
     removeDeletedFilesFromDB();
 
     auto culFF = m_culInterface->getFS();
 
-    std::vector<CUL::FS::Path> filesInDir = culFF->ListAllFiles( path );
+    std::vector<CUL::FS::Path> allFiles;
 
-    const auto fileSizes = filesInDir.size();
+    for( const auto& path: m_searchPaths )
+    {
+        std::vector<CUL::FS::Path> filesInDir = culFF->ListAllFiles( path );
+        allFiles.insert( allFiles.end(), filesInDir.begin(), filesInDir.end() );
+    }
+
+    const auto fileSizes = allFiles.size();
     m_filesCount = (float)fileSizes;
     m_filesLeft = m_filesCount;
 
     for( size_t i = 0; i < fileSizes; ++i)
     {
-        const CUL::FS::Path& file = filesInDir[i];
+        const CUL::FS::Path& file = allFiles[i];
         if( file.getIsDir())
         {
             continue;
         }
 
-        addTask( [this,file]() {
+        addTask( [this,file](size_t workerId) {
+            m_currentFiles[workerId] = file.getPath();
             addFile(file.getPath().string());
+            m_currentFiles[workerId] = "";
+
+            float tasksLeft = m_filesDone;
+            m_filesDone = m_filesDone + 1.f;
+            float taskDone = m_filesCount - tasksLeft;
+            CUL::String taskDoneAsString = CUL::String( taskDone );
+            float percentage = 100.f - (100.f * taskDone / m_filesCount);
+
+            if( percentage > 99.f )
+            {
+                m_culInterface->getLogger()->log( "LOL" );
+            }
+
+            const CUL::String percentageAsString = CUL::String( percentage );
+            const CUL::String logText = percentageAsString + " done. " + CUL::String( "Path: " ) + file.getPath() + " Done.";
+
+            m_doneText = logText;
+            m_culInterface->getLogger()->log( logText );
         } );
     }
 
@@ -401,17 +555,7 @@ void App::search( const std::string& path, const std::string& summaryFilePath )
         }
     }
 
-    CUL::String filePath;
-    if( summaryFilePath.empty() )
-    {
-        filePath = "Result.txt";
-    }
-    else
-    {
-        filePath = summaryFilePath;
-    }
-
-    auto file = m_culInterface->getFF()->createRegularFileRawPtr( CUL::FS::Path( filePath ) );
+    auto file = m_culInterface->getFF()->createRegularFileRawPtr( CUL::FS::Path( m_outputFile ) );
 
 
     CUL::String text = CUL::String( "Files: " );
@@ -421,12 +565,10 @@ void App::search( const std::string& path, const std::string& summaryFilePath )
     for( const auto& sameSizeGroup : m_filesPathsMap )
     {
         text = CUL::String( "\tSize: " ) + CUL::String( sameSizeGroup.first );
-        m_culInterface->getLogger()->log( text );
         file->addLine( text );
         for( const auto& sameMD5Group : sameSizeGroup.second )
         {
             text = CUL::String( "\t\tMD5: " ) + CUL::String( sameMD5Group.first );
-            m_culInterface->getLogger()->log( text );
             file->addLine( text );
 
             bool duplicatesFound = false;
@@ -439,7 +581,6 @@ void App::search( const std::string& path, const std::string& summaryFilePath )
             for( const auto& path : sameMD5Group.second )
             {
                 text = CUL::String( "\t\t\tFile: " ) + CUL::String( path );
-                m_culInterface->getLogger()->log( text );
                 file->addLine( text );
 
                 if( duplicatesFound )
@@ -452,21 +593,17 @@ void App::search( const std::string& path, const std::string& summaryFilePath )
         }
     }
 
-
     for( const auto& sizesGroup : m_duplicates )
     {
         text = CUL::String( "Sizes: " ) + CUL::String( sizesGroup.first );
-        m_culInterface->getLogger()->log( text );
         file->addLine( text );
 
         for( const auto& md5Group : sizesGroup.second )
         {
             text = CUL::String( "MD5: " ) + CUL::String( md5Group.first );
-            m_culInterface->getLogger()->log( text );
             file->addLine( text );
             for( const auto& paths: md5Group.second )
             {
-                m_culInterface->getLogger()->log( paths.getPath() );
                 file->addLine( text );
             }
         }
@@ -479,31 +616,39 @@ void App::search( const std::string& path, const std::string& summaryFilePath )
 
     sqlite3_close( m_db );
 
+    m_searchStarted = false;
+
     m_culInterface->getLogger()->log( "\nDONE.");
 }
 
-
 void App::workerThreadMethod()
 {
+    ++m_workersActive;
+
+    const CUL::String threadName = "FILE WORKER " + CUL::String( (int)m_workerId );
+    m_oglw->getCul()->getThreadUtils().setCurrentThreadName( threadName );
+    const size_t currentWorkerId = m_workerId;
+    ++m_workerId;
+    
     while( getTasksLeft() > 0 )
     {
-        std::function<void()> task = getTask();
-        task();
+        std::function<void(size_t)> task = getTask();
+        task( currentWorkerId );
     }
+    --m_workersActive;
 }
 
 
-void App::addTask( std::function<void()> task )
+void App::addTask( std::function<void(size_t)> task )
 {
     std::lock_guard<std::mutex> functionLock( m_tasksMtx );
     m_tasks.push_back( task );
 }
 
-
-std::function<void()> App::getTask()
+std::function<void(size_t)> App::getTask()
 {
     std::lock_guard<std::mutex> functionLock( m_tasksMtx );
-    std::function<void()> task = *m_tasks.rbegin();
+    std::function<void(size_t)> task = *m_tasks.rbegin();
     m_tasks.pop_back();
     m_culInterface->getLogger()->log( CUL::String( "Tasks left:" ) + CUL::String( (int)m_tasks.size() ) );
     return task;
@@ -569,6 +714,10 @@ void App::addFile( const CUL::String& path )
     CUL::String md5;
     CUL::String sizeBytes;
 
+    if( path.contains( "science_in_this_shit" ) )
+    {
+        auto x = 0;
+    }
     if( modTimeFromFS != modTimeFromDb )
     {
         md5 = file->getMD5();
@@ -588,12 +737,12 @@ void App::addFile( const CUL::String& path )
         std::lock_guard<std::mutex> lock( m_duplicatesMtx );
 
         std::lock_guard<std::mutex> lockMap( m_filesPathsMapMtx );
-        const auto it = m_filesPathsMap.find( sizeBytes );
+        const auto it = m_filesPathsMap.find( sizeBytes.toUInt() );
         if( it == m_filesPathsMap.end() )
         {
             Value sameSizeFiles;
             sameSizeFiles[md5].push_back( path );
-            m_filesPathsMap[sizeBytes] = sameSizeFiles;
+            m_filesPathsMap[sizeBytes.toUInt()] = sameSizeFiles;
         }
         else
         {
@@ -602,12 +751,6 @@ void App::addFile( const CUL::String& path )
         }
     }
 
-    float tasksLeft = (float)getTasksLeft();
-    float percentage = 100.f * ( 1 - ( tasksLeft / m_filesCount ) );
-    const CUL::String logText = CUL::String( percentage ) + " done. " + CUL::String( "Path: " ) + path + " Done.";
-
-    m_doneText = logText;
-    m_culInterface->getLogger()->log( logText );
     m_frameTimer->stop();
     const auto& elapsed = m_frameTimer->getElapsed();
     const unsigned elapsedUi = elapsed.getMs();
@@ -632,9 +775,15 @@ void App::addFile( const CUL::String& path )
 
 void App::addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime )
 {
+    if( filePath.contains( "science_in_this_shit" ) )
+    {
+        auto x = 0;
+    }
+
     CUL::String result;
     CUL::String filePathNormalized = filePath;
     filePathNormalized.replace( "./", "" );
+    filePathNormalized.replace( "'", "''" );
     filePathNormalized.removeAll( '\0' );
     CUL::String sqlQuery = "INSERT INTO FILES (PATH, SIZE, MD5, LAST_MODIFICATION ) VALUES ('" + filePathNormalized + "', '" + fileSize +
                            "', '" + md5 + "', '" + modTime + "');";
@@ -670,12 +819,20 @@ CUL::String App::getModTimeFromDb( const CUL::String& filePath )
 
 void App::getParametersFromDb( const CUL::String& filePath )
 {
+    if( filePath.contains( "science_in_this_shit" ) )
+    {
+        auto x = 0;
+    }
+
     CUL::String filePathNormalized = filePath;
     filePathNormalized.replace( "./", "" );
     filePathNormalized.removeAll( '\0' );
+    filePathNormalized.replace( "'", "''" );
     std::string sqlQuery =
         std::string( "SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES WHERE PATH='" ) + filePathNormalized.string() + "';";
     char* zErrMsg = nullptr;
+
+
 
     auto callback = []( void*, int argc, char** argv, char** )
     {
@@ -702,6 +859,12 @@ void App::getParametersFromDb( const CUL::String& filePath )
 void App::addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime )
 {
     std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
+
+    if( path.contains("science_in_this_shit") )
+    {
+        auto x = 0;
+    }
+
     FileDb fdb;
     fdb.size = size;
     fdb.md5 = md;

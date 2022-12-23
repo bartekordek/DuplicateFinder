@@ -15,6 +15,7 @@ else()
 endif()
 
 include_directories("inc")
+include_directories( SYSTEM "../deps/nativefiledialog-extended/src/include")
 
 include_directories( SYSTEM "../deps/GameEngine/deps/SDL2Wrapper/deps/CUL/deps/sqlite-amalgamation-3340000" )
 
@@ -44,7 +45,7 @@ IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 
-set( DEPENDENCIES gameengine_dynamic AdditionalDeps )
+set( DEPENDENCIES gameengine_dynamic AdditionalDeps nfd )
 
 if( MSVC )
     target_link_options(${EXEC} PUBLIC "/INCREMENTAL:NO")

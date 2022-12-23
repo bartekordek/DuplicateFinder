@@ -8,6 +8,7 @@
 #include "CUL/Threading/ThreadWrap.hpp"
 #include "CUL/Math/Rotation.hpp"
 
+
 NAMESPACE_BEGIN( LOGLW )
 class Camera;
 class Cube;
@@ -42,7 +43,7 @@ private:
         CUL::String modTime;
         CUL::String path;
     };
-    using FileSize = CUL::String;
+    using FileSize = unsigned;
     using MD5Value = CUL::String;
     using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
 
@@ -54,11 +55,11 @@ private:
     void onMouseEvent( const SDL2W::MouseData& mouseData );
     void updateEuler( float yaw, float pitch );
     void guiIteration();
-    void search( const std::string& path, const std::string& summaryFilePath );
+    void search();
     void addFile( const CUL::String& path );
 
-    void addTask( std::function<void()> task );
-    std::function<void()> getTask();
+    void addTask( std::function<void( size_t )> task );
+    std::function<void(size_t)> getTask();
     void workerThreadMethod();
     unsigned getTasksLeft();
     void initDb();
@@ -68,6 +69,11 @@ private:
     void printCurrentMean();
 
     glm::vec3 moveOnSphere( float yaw, float pitch, float row, float rad );
+    void addSearchDir();
+    void removeDir();
+    void chooseResultFile();
+    CUL::String m_outputFile;
+    std::vector<CUL::String> m_searchPaths;
 
     std::atomic<bool> m_runTimer = true;
     CUL::ThreadWrapper m_thread;
@@ -97,7 +103,8 @@ private:
 
 
     CUL::CULInterface* m_culInterface = nullptr;
-    size_t m_maxThreadCount = 10;
+    size_t m_maxThreadCount = 12;
+    std::vector<CUL::String> m_currentFiles;
 
     std::mutex m_duplicatesMtx;
     std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
@@ -109,7 +116,7 @@ private:
     std::map<std::thread::id, std::thread> m_workers;
 
     std::mutex m_tasksMtx;
-    std::vector<std::function<void()>> m_tasks;
+    std::vector<std::function<void(size_t)>> m_tasks;
 
     std::mutex m_filesFromDbMtx;
     std::map<CUL::String, FileDb> m_filesFromDb;
@@ -136,4 +143,10 @@ private:
 
     CUL::String m_doneText;
     CUL::String m_currentFileText;
+
+    std::atomic<size_t> m_workersActive = 0;
+    std::atomic<size_t> m_workerId = 0;
+
+    bool m_searchStarted = false;
+    float m_filesDone = 0.f;
 };

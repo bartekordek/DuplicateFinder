@@ -299,6 +299,27 @@
                 "showReuseMessage": true,
                 "clear": true
             }
-        }
+        },
+        {
+            "label": "[WINDOWS][RELEASE][DuplicateFinderGUI]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target DuplicateFinderGUI --config RELEASE -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn":"[WINDOWS][CMAKE][CREATE][RELEASE]"
+        },
     ]
 }
