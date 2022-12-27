@@ -35,10 +35,6 @@ void App::onInit()
 
     m_culInterface = m_oglw->getCul();
 
-    m_oglw->getCamera().setEyePos( { 0.f, 0.f, 8.f } );
-    m_oglw->getCamera().setZnear( 0.1f );
-    m_oglw->getCamera().getCenter().z = -512.f;
-
     m_oglw->drawDebugInfo( true );
     m_oglw->setBackgroundColor( LOGLW::ColorE::BLUE );
 
@@ -116,69 +112,12 @@ void App::onWindowEvent( const SDL2W::WindowEvent::Type e )
     }
 }
 
-void App::onKeyBoardEvent( const SDL2W::IKey& key )
+void App::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
 {
-    if( key.getKeyIsDown() && key.getKeyName() == "W" )
-    {
-        m_camera->m_pos += m_front * m_velocity;
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "S" )
-    {
-        m_camera->m_pos -= m_front * m_velocity;
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "A" )
-    {
-        m_camera->m_pos -= m_right * m_velocity;
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "D" )
-    {
-        m_camera->m_pos += m_right * m_velocity;
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "," )
-    {
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "." )
-    {
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "Q" )
+    if( keys.at("Q") )
     {
         m_runTimer = false;
         close();
-    }
-
-    static float lookDelta = 0.05f;
-    if( key.getKeyIsDown() && key.getKeyName() == "Up" )
-    {
-        updateEuler( m_yawLast, m_pitchLast + lookDelta );
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "Down" )
-    {
-        updateEuler( m_yawLast, m_pitchLast - lookDelta );
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "Left" )
-    {
-        updateEuler( m_yawLast - lookDelta, m_pitchLast );
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "Right" )
-    {
-        updateEuler( m_yawLast + lookDelta, m_pitchLast );
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "M" )
-    {
-    }
-
-    if( key.getKeyIsDown() && key.getKeyName() == "N" )
-    {
     }
 }
 
@@ -404,7 +343,7 @@ void App::chooseResultFile()
     NFD_Init();
 
     nfdchar_t* outPath = nullptr;
-    nfdfilteritem_t filter = { L"*.txt", L"Text file" };
+    nfdfilteritem_t filter = { L"*.txt", L"*.txt" };
     nfdresult_t result = NFD_SaveDialog( &outPath, &filter, 1, nullptr, nullptr );
     if( result == NFD_OKAY )
     {
@@ -464,10 +403,10 @@ void App::updateEuler( float yaw, float pitch )
     CUL::String logVal = "YAW: " + CUL::String( yaw ) + CUL::String( ", PITCH: " ) + CUL::String( pitch );
     m_logger->log( logVal );
 
-    m_lookAngles.yaw.setValue( yaw, CUL::MATH::Angle::Type::RADIAN );
-    m_lookAngles.pitch.setValue( pitch, CUL::MATH::Angle::Type::RADIAN );
+    m_lookAngles.Yaw.setValue( yaw, CUL::MATH::Angle::Type::RADIAN );
+    m_lookAngles.Pitch.setValue( pitch, CUL::MATH::Angle::Type::RADIAN );
 
-    glm::vec3 NewCenter = moveOnSphere( m_lookAngles.yaw.getRad(), m_lookAngles.pitch.getRad(), 0.f, 100.f );
+    glm::vec3 NewCenter = moveOnSphere( m_lookAngles.Yaw.getRad(), m_lookAngles.Pitch.getRad(), 0.f, 100.f );
     NewCenter += eye;
     m_oglw->getCamera().setCenter( NewCenter );
 
@@ -561,37 +500,6 @@ void App::search()
     CUL::String text = CUL::String( "Files: " );
     m_culInterface->getLogger()->log( text );
     file->addLine( text );
-
-    for( const auto& sameSizeGroup : m_filesPathsMap )
-    {
-        text = CUL::String( "\tSize: " ) + CUL::String( sameSizeGroup.first );
-        file->addLine( text );
-        for( const auto& sameMD5Group : sameSizeGroup.second )
-        {
-            text = CUL::String( "\t\tMD5: " ) + CUL::String( sameMD5Group.first );
-            file->addLine( text );
-
-            bool duplicatesFound = false;
-            if( sameMD5Group.second.size() > 1 )
-            {
-                text = CUL::String( "\t\tPossible Duplicates");
-                duplicatesFound = true;
-            }
-
-            for( const auto& path : sameMD5Group.second )
-            {
-                text = CUL::String( "\t\t\tFile: " ) + CUL::String( path );
-                file->addLine( text );
-
-                if( duplicatesFound )
-                {
-                    m_duplicates[sameSizeGroup.first] = std::map<MD5Value, std::set<CUL::FS::Path>>();
-                    std::map<MD5Value, std::set<CUL::FS::Path>>& md5PathList = m_duplicates[sameSizeGroup.first];
-                    md5PathList[sameMD5Group.first].insert( path );
-                }
-            }
-        }
-    }
 
     for( const auto& sizesGroup : m_duplicates )
     {
@@ -701,7 +609,7 @@ void App::addFile( const CUL::String& path )
 {
     m_currentFileText = "Current file: " + path + ".";
 
-    CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer();
+    CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer( m_logger );
     m_frameTimer->start();
 
     std::unique_ptr<CUL::FS::IFile> file;
@@ -751,12 +659,14 @@ void App::addFile( const CUL::String& path )
         }
     }
 
+    addDuplicate( sizeBytes.toUInt(), md5, path );
+
     m_frameTimer->stop();
     const auto& elapsed = m_frameTimer->getElapsed();
     const unsigned elapsedUi = elapsed.getMs();
     m_fileAddTasksDuration.push_back( elapsedUi );
     delete m_frameTimer;
-    printCurrentMean();
+    //printCurrentMean();
 
     FileDb fileDb;
     fileDb.md5 = md5;
@@ -771,6 +681,33 @@ void App::addFile( const CUL::String& path )
                {
                    return fdb1.md5 < fdb2.md5;
                } );
+}
+
+void App::addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& path )
+{
+    std::lock_guard<std::mutex> lockOut( m_duplicatesMtx );
+    std::lock_guard<std::mutex> lockIn( m_filesPathsMapMtx );
+
+    auto it = m_filesPathsMap.find( fileSize );
+    if( it != m_filesPathsMap.end() )
+    {
+        Value& map = it->second;
+        auto md5it = map.find( md5 );
+        if( md5it != map.end() )
+        {
+            std::vector<CUL::FS::Path>& someVector = md5it->second;
+
+            std::map<MD5Value, std::set<CUL::FS::Path>>& md5Map =  m_duplicates[fileSize];
+
+            std::set<CUL::FS::Path>& dupVec = md5Map[md5];
+            dupVec.clear();
+
+            for( const auto& path: someVector )
+            {
+                dupVec.insert( path );
+            }
+        }
+    }
 }
 
 void App::addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime )

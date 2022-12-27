@@ -4,9 +4,15 @@
 
 #include "SDL2Wrapper/WindowData.hpp"
 #include "SDL2Wrapper/IWindow.hpp"
+#include "SDL2Wrapper/Input/MouseData.hpp"
 
 #include "CUL/Threading/ThreadWrap.hpp"
 #include "CUL/Math/Rotation.hpp"
+
+namespace SDL2W
+{
+    class IKey;
+}
 
 
 NAMESPACE_BEGIN( LOGLW )
@@ -50,7 +56,7 @@ private:
     void onInit() override;
     void onWindowEvent( const SDL2W::WindowEvent::Type e ) override;
     void timerThread();
-    void onKeyBoardEvent( const SDL2W::IKey& key ) override;
+    void onKeyBoardEvent( const SDL2W::KeyboardState& key ) override;
     void customFrame();
     void onMouseEvent( const SDL2W::MouseData& mouseData );
     void updateEuler( float yaw, float pitch );
@@ -72,6 +78,7 @@ private:
     void addSearchDir();
     void removeDir();
     void chooseResultFile();
+    void addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& path );
     CUL::String m_outputFile;
     std::vector<CUL::String> m_searchPaths;
 
