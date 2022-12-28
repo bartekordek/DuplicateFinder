@@ -63,7 +63,7 @@ private:
     size_t m_maxThreadCount =  10;
 
     std::mutex m_duplicatesMtx;
-    std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
+    std::map<FileSize, std::map<MD5Value, std::vector<CUL::FS::Path>>> m_duplicates;
 
     std::mutex m_filesPathsMapMtx;
     std::map<FileSize, Value> m_filesPathsMap;

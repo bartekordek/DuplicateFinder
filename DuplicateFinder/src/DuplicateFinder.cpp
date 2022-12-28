@@ -200,7 +200,7 @@ void DuplicateFinder::removeDeletedFilesFromDB()
 
 void DuplicateFinder::addFile( const CUL::String& path )
 {
-    CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer();
+    CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer( m_culInterface->getLogger() );
     m_frameTimer->start();
 
     std::unique_ptr<CUL::FS::IFile> file;
@@ -424,7 +424,6 @@ std::function<void()> DuplicateFinder::getTask()
     std::lock_guard<std::mutex> functionLock( m_tasksMtx );
     std::function<void()> task = *m_tasks.rbegin();
     m_tasks.pop_back();
-    m_culInterface->getLogger()->log( CUL::String( "Tasks left:" ) + CUL::String( (int)m_tasks.size() ) );
     return task;
 }
 

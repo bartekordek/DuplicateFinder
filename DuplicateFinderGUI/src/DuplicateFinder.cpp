@@ -494,6 +494,8 @@ void App::search()
         }
     }
 
+    m_outputFile = L"C:\\Users\\barte\\Desktop\\dupka.txt";
+
     auto file = m_culInterface->getFF()->createRegularFileRawPtr( CUL::FS::Path( m_outputFile ) );
 
 
@@ -512,7 +514,7 @@ void App::search()
             file->addLine( text );
             for( const auto& paths: md5Group.second )
             {
-                file->addLine( text );
+                file->addLine( paths );
             }
         }
     }
