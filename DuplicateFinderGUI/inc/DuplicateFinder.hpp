@@ -7,6 +7,7 @@
 #include "SDL2Wrapper/Input/MouseData.hpp"
 
 #include "CUL/Threading/ThreadWrap.hpp"
+#include "CUL/Threading/Worker.hpp"
 #include "CUL/Math/Rotation.hpp"
 
 namespace SDL2W
@@ -61,8 +62,12 @@ private:
     void onMouseEvent( const SDL2W::MouseData& mouseData );
     void updateEuler( float yaw, float pitch );
     void guiIteration();
-    void search();
+    void searchOneTime();
+    void searchBackground();
+    std::atomic_bool m_runBackground = false;
+
     void addFile( const CUL::String& path );
+    void addFileToList( const CUL::String& path );
 
     void addTask( std::function<void( size_t )> task );
     std::function<void(size_t)> getTask();
@@ -79,6 +84,10 @@ private:
     void removeDir();
     void chooseResultFile();
     void addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& path );
+
+    void startWorkers();
+    void saveDuplicatesToFile();
+
     CUL::String m_outputFile;
     std::vector<CUL::String> m_searchPaths;
 
@@ -110,7 +119,7 @@ private:
 
 
     CUL::CULInterface* m_culInterface = nullptr;
-    size_t m_maxThreadCount = 12;
+    size_t m_maxThreadCount = 4;
     std::vector<CUL::String> m_currentFiles;
 
     std::mutex m_duplicatesMtx;
@@ -118,6 +127,8 @@ private:
 
     std::mutex m_filesPathsMapMtx;
     std::map<FileSize, Value> m_filesPathsMap;
+
+    std::atomic_bool m_workersEnabled = false;
 
     std::mutex m_workersMtx;
     std::map<std::thread::id, std::thread> m_workers;
@@ -130,8 +141,8 @@ private:
 
     std::mutex m_sqliteMtx;
 
-    float m_filesCount = 0.f;
-    float m_filesLeft = 0.f;
+    std::atomic<float> m_filesCount = 0.f;
+    std::atomic<float> m_filesDone = 0.f;
 
     int m_last = 101;
 
@@ -148,12 +159,18 @@ private:
 
     std::thread m_searchThread;
 
-    CUL::String m_doneText;
     CUL::String m_currentFileText;
 
     std::atomic<size_t> m_workersActive = 0;
     std::atomic<size_t> m_workerId = 0;
 
     bool m_searchStarted = false;
-    float m_filesDone = 0.f;
+
+    CUL::Worker m_updateDeletedFiles;
+
+
+    std::mutex m_allFilestMtx;
+    std::vector<CUL::FS::Path> m_allFilesList;
+
+    CUL::Worker m_genericWorker;
 };
