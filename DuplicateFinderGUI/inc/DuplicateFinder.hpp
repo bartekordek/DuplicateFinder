@@ -67,7 +67,7 @@ private:
     std::atomic_bool m_runBackground = false;
 
     void addFile( const CUL::String& path );
-    void addFileToList( const CUL::String& path );
+    void addFileToList( const CUL::String path );
 
     void addTask( std::function<void( size_t )> task );
     std::function<void(size_t)> getTask();
@@ -119,7 +119,7 @@ private:
 
 
     CUL::CULInterface* m_culInterface = nullptr;
-    size_t m_maxThreadCount = 4;
+    size_t m_maxThreadCount = 5;
     std::vector<CUL::String> m_currentFiles;
 
     std::mutex m_duplicatesMtx;
@@ -167,10 +167,12 @@ private:
     bool m_searchStarted = false;
 
     CUL::Worker m_updateDeletedFiles;
-
+    CUL::Worker m_saveWorker;
 
     std::mutex m_allFilestMtx;
     std::vector<CUL::FS::Path> m_allFilesList;
 
     CUL::Worker m_genericWorker;
+
+    CUL::String m_foundFile;
 };

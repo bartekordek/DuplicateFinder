@@ -190,6 +190,13 @@ void App::guiIteration()
 
     ImGui::Text( m_outputFile.cStr() );
 
+    if( !m_foundFile.empty() )
+    {
+        ImGui::Text( "Found file: " );
+        ImGui::SameLine();
+        ImGui::Text( m_foundFile.cStr() );
+    }
+
     static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
 
     if( ImGui::BeginTable( "split", 3, flags ) )
@@ -228,6 +235,11 @@ void App::guiIteration()
         if( m_filesCount < 1.f )
         {
             percentage = 0.f;
+        }
+
+        if( percentage > 100.f )
+        {
+            percentage = 100.f;
         }
 
         const CUL::String percentageAsString = CUL::String( percentage );
@@ -451,9 +463,6 @@ void App::searchOneTime()
         }
     }
 
-    saveDuplicatesToFile();
-
-
     sqlite3_close( m_db );
 
     m_searchStarted = false;
@@ -469,21 +478,38 @@ void App::searchBackground()
     } );
 
     m_updateDeletedFiles.setRemoveTasksWhenConsumed( false );
-
+    m_updateDeletedFiles.setThreadName( "m_updateDeletedFiles" );
+    m_updateDeletedFiles.SleepMS = 1000;
     m_updateDeletedFiles.run();
-
     m_runBackground = true;
 
-    startWorkers();
+    m_saveWorker.setRemoveTasksWhenConsumed( false );
+    m_saveWorker.setThreadName( "m_saveWorker" );
+    m_saveWorker.SleepMS = 1000;
+    m_saveWorker.run();
+    m_saveWorker.addTask( [this] (){
+        saveDuplicatesToFile(); } );
 
+    startWorkers();
+    m_searchStarted = true;
+
+
+    m_genericWorker.setThreadName( "m_genericWorker" );
+    m_genericWorker.setRemoveTasksWhenConsumed( true );
     m_genericWorker.run();
 
     m_genericWorker.addTask( [this, culFF] (){
-        for( const auto& path : m_searchPaths )
+        for( const auto& m_searchPath : m_searchPaths )
         {
-            culFF->ListAllFiles( path, [this] ( const CUL::FS::Path& path ){
-                m_filesCount = m_filesCount + 1.f;
-                addFile( path.getPath().string() );
+            culFF->ListAllFiles( m_searchPath, [this] ( const CUL::FS::Path& path ){
+
+                if( !path.getIsDir() )
+                {
+                    m_filesCount = m_filesCount + 1.f;
+                    const auto pathObj = path.getPath();
+                    const CUL::String pathString = pathObj.string();
+                    addFileToList( pathString );
+                }
             } );
         }
     } );
@@ -492,15 +518,14 @@ void App::searchBackground()
 
     while( m_runBackground )
     {
-        if( getTasksLeft() > m_maxThreadCount * 4 )
+        while( getTasksLeft() > m_maxThreadCount * 8 )
         {
             CUL::ITimer::sleepMiliSeconds( 100 );
         }
 
-
         std::vector<CUL::FS::Path> allFilesCopy;
         {
-            std::lock_guard<std::mutex> lock( m_filesPathsMapMtx );
+            std::lock_guard<std::mutex> lock( m_allFilestMtx );
             allFilesCopy = m_allFilesList;
         }
 
@@ -525,7 +550,14 @@ void App::saveDuplicatesToFile()
     m_culInterface->getLogger()->log( text );
     file->addLine( text );
 
-    for( const auto& sizesGroup : m_duplicates )
+    std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> duplicatesCopy;
+
+    {
+        std::lock_guard<std::mutex> lock( m_duplicatesMtx );
+        duplicatesCopy = m_duplicates;
+    }
+
+    for( const auto& sizesGroup : duplicatesCopy )
     {
         bool foundDups = false;
         for( const auto& md5Group : sizesGroup.second )
@@ -643,6 +675,8 @@ void App::removeDeletedFilesFromDB()
             removeFileFromDB( path );
         }
     }
+
+    m_deletionList.clear();
 }
 
 
@@ -743,11 +777,17 @@ void App::addFile( const CUL::String& path )
                } );
 }
 
-void App::addFileToList( const CUL::String& path )
+void App::addFileToList( const CUL::String path )
 {
     std::lock_guard<std::mutex> lockMap( m_allFilestMtx );
-    m_allFilesList.push_back( path );
-    std::sort( m_allFilesList.begin(), m_allFilesList.end() );
+    auto it = std::find( m_allFilesList.begin(), m_allFilesList.end(), path );
+    if( it == m_allFilesList.end() )
+    {
+        m_allFilesList.push_back( path );
+        std::sort( m_allFilesList.begin(), m_allFilesList.end() );
+    }
+
+    m_foundFile = path;
 }
 
 void App::addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& path )
