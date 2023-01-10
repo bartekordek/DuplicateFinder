@@ -6,9 +6,14 @@
 #include "SDL2Wrapper/IWindow.hpp"
 #include "SDL2Wrapper/Input/MouseData.hpp"
 
+#include "CUL/Filesystem/IFile.hpp"
 #include "CUL/Threading/ThreadWrap.hpp"
 #include "CUL/Threading/Worker.hpp"
 #include "CUL/Math/Rotation.hpp"
+
+#include "CUL/STL_IMPORTS/STD_list.hpp"
+#include "CUL/STL_IMPORTS/STD_deque.hpp"
+
 
 namespace SDL2W
 {
@@ -23,6 +28,19 @@ class Sprite;
 class TransformComponent;
 class Quad;
 NAMESPACE_END( LOGLW )
+
+using FileSize = unsigned;
+using MD5Value = CUL::String;
+using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
+
+
+//std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
+struct FileGroup
+{
+    FileSize fileSize = 0u;
+    MD5Value md5;
+    std::list<CUL::FS::Path> files;
+};
 
 class App final: public LOGLW::IGameEngineApp
 {
@@ -50,9 +68,7 @@ private:
         CUL::String modTime;
         CUL::String path;
     };
-    using FileSize = unsigned;
-    using MD5Value = CUL::String;
-    using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
+
 
     void onInit() override;
     void onWindowEvent( const SDL2W::WindowEvent::Type e ) override;
@@ -125,9 +141,6 @@ private:
     std::mutex m_duplicatesMtx;
     std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
 
-    std::mutex m_filesPathsMapMtx;
-    std::map<FileSize, Value> m_filesPathsMap;
-
     std::atomic_bool m_workersEnabled = false;
 
     std::mutex m_workersMtx;
@@ -139,8 +152,6 @@ private:
     std::mutex m_filesFromDbMtx;
     std::map<CUL::String, FileDb> m_filesFromDb;
 
-    std::mutex m_sqliteMtx;
-
     std::atomic<float> m_filesCount = 0.f;
     std::atomic<float> m_filesDone = 0.f;
 
@@ -150,7 +161,10 @@ private:
     CUL::String m_empty;
 
     std::mutex m_fileAddTasksDurationMtx;
-    std::vector<unsigned> m_fileAddTasksDuration;
+    // m_fileAddTasksDuration replace with circular
+    //std::vector<unsigned> m_fileAddTasksDuration;
+    size_t m_maxTasksDurationSamples = 256;
+    std::deque<unsigned> m_fileAddTasksDuration;
 
     std::vector<CUL::String> m_deletionList;
 
@@ -169,10 +183,14 @@ private:
     CUL::Worker m_updateDeletedFiles;
     CUL::Worker m_saveWorker;
 
-    std::mutex m_allFilestMtx;
-    std::vector<CUL::FS::Path> m_allFilesList;
-
     CUL::Worker m_genericWorker;
 
     CUL::String m_foundFile;
+
+    std::mutex m_filesMtx;
+    std::list<FileGroup> m_files;
+
+    int m_minFileSize = 2000;
+
+    bool m_initialDbFilesUpdated = false;
 };
