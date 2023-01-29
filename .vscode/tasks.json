@@ -113,8 +113,7 @@
                 "panel": "dedicated",
                 "showReuseMessage": true,
                 "clear": true
-            },
-            "dependsOn":"[WINDOWS][CMAKE][CREATE][DEBUG]"
+            }
         },
         {
             "label": "[LINUX][DEBUG][DuplicateFinderGUI]",

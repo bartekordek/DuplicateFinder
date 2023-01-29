@@ -52,41 +52,8 @@ void App::onInit()
         timerThread();
     } );
 
-    initDb();
-
     m_currentFiles.resize( m_maxThreadCount );
     m_thread.run();
-}
-
-void App::initDb()
-{
-    int rc = sqlite3_open( "FilesList.db", &m_db );
-
-    std::string sqlQuery =
-        "SELECT * \
-    FROM FILES";
-
-    auto callback = []( void*, int, char**, char** )
-    {
-        // DuplicateFinder::s_instance->callback(NotUsed, argc, argv, azColName);
-        return 0;
-    };
-
-    char* zErrMsg = nullptr;
-    rc = sqlite3_exec( m_db, sqlQuery.c_str(), nullptr, 0, &zErrMsg );
-
-    if( rc != SQLITE_OK )
-    {
-        sqlQuery =
-            "CREATE TABLE FILES (\
-        PATH varchar(1024),\
-        SIZE varchar(512),\
-        MD5 varchar(1024),\
-        LAST_MODIFICATION varchar(1024)\
-        );";
-        std::string errorResult( zErrMsg );
-        rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
-    }
 }
 
 int App::callback( void*, int argc, char** argv, char** azColName )
@@ -189,12 +156,23 @@ void App::guiIteration()
 
     ImGui::Text( m_outputFile.cStr() );
 
-    if( !m_foundFile.empty() )
     {
-        ImGui::Text( "Found file: " );
-        ImGui::SameLine();
-        ImGui::Text( m_foundFile.cStr() );
+        CUL::String textCopy;
+        {
+            std::lock_guard<std::mutex> guard( m_foundFileMtx );
+            {
+                textCopy = m_foundFile;
+            }
+        }
+
+        if( !textCopy.empty() )
+        {
+            ImGui::Text( "Found file: " );
+            ImGui::SameLine();
+            ImGui::Text( textCopy.cStr() );
+        }
     }
+
 
     static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
 
@@ -266,15 +244,15 @@ void App::guiIteration()
     }
 
 
-    for( const auto& [filesize, value] : m_duplicates )
+    for( const auto& [filesize, flieGroup] : m_duplicates )
     {
-        const size_t md5Count = value.size();
+        const size_t md5Count = flieGroup.MD5Group.size();
         const CUL::String m_fileSizeString = "Size: " + CUL::String( filesize ) + ", MD5 count: " + CUL::String( (int)md5Count );
 
         bool show = false;
-        for( const auto& [md5value, paths] : value )
+        for( const auto& [md5value, paths] : flieGroup.MD5Group )
         {
-            if( paths.size() > 1 )
+            if( paths.files.size() > 1 )
             {
                 show = true;
             }
@@ -282,15 +260,15 @@ void App::guiIteration()
 
         if( show && ImGui::TreeNode( m_fileSizeString.cStr() ) )
         {
-            for( const auto& [md5value, paths] : value )
+            for( const auto& [md5value, md5Group] : flieGroup.MD5Group )
             {
-                const size_t filesCount = paths.size();
+                const size_t filesCount = md5Group.files.size();
                 if( filesCount > 1 )
                 {
                     const CUL::String m_md5valueString = "MD5: " + md5value + ", files count: " + CUL::String( (int) filesCount );
                     if( ImGui::TreeNode( m_md5valueString.cStr() ) )
                     {
-                        for( const auto& fsPath : paths )
+                        for( const auto& fsPath : md5Group.files )
                         {
                             ImGui::InputText( "default", (char*)fsPath.getPath().cStr(), 64 );
                             //ImGui::BulletText( fsPath.getPath().cStr() );
@@ -432,8 +410,6 @@ void App::searchOneTime()
     m_culInterface->getLogger()->log( CUL::String( "Start search." ) );
     m_searchStarted = true;
 
-    removeDeletedFilesFromDB();
-
     auto culFF = m_culInterface->getFS();
 
     startWorkers();
@@ -441,7 +417,10 @@ void App::searchOneTime()
     for( const auto& path : m_searchPaths )
     {
         culFF->ListAllFiles( path, [this] ( const CUL::FS::Path& path ){
-            m_foundFile = path.getPath();
+            {
+                std::lock_guard<std::mutex> guard( m_foundFileMtx );
+                m_foundFile = path.getPath();
+            }
             m_filesCount = m_filesCount + 1.f;
             addTask( [this, path] ( size_t workerId ){
                 m_currentFiles[workerId] = path.getPath();
@@ -463,8 +442,6 @@ void App::searchOneTime()
         }
     }
 
-    sqlite3_close( m_db );
-
     m_searchStarted = false;
 
     m_culInterface->getLogger()->log( "\nDONE.");
@@ -475,7 +452,9 @@ void App::searchBackground()
     auto culFF = m_culInterface->getFS();
     m_updateDeletedFiles.addTask( [this] (){
         m_culInterface->getLogger()->log( "removeDeletedFilesFromDB::START" );
-        removeDeletedFilesFromDB();
+
+        m_fileDb.loadFilesFromDatabase();
+        m_fileDb.removeFilesThatDoNotExistFromBase();
 
         m_initialDbFilesUpdated = true;
 
@@ -491,7 +470,7 @@ void App::searchBackground()
     m_saveWorker.setRemoveTasksWhenConsumed( false );
     m_saveWorker.setThreadName( "m_saveWorker" );
     m_saveWorker.SleepMS = 16000;
-    //m_saveWorker.run();
+    m_saveWorker.run();
     m_saveWorker.addTask( [this] (){
         m_culInterface->getLogger()->log( "saveDuplicatesToFile::START" );
         saveDuplicatesToFile();
@@ -513,57 +492,54 @@ void App::searchBackground()
 
                 if( !path.getIsDir() )
                 {
-                    m_foundFile = path.getPath();
-
-                    m_filesCount = m_filesCount + 1.f;
+                    {
+                        std::lock_guard<std::mutex> guard( m_foundFileMtx );
+                        m_foundFile = path.getPath();
+                    }
                    
                     addTask( [this, path] ( size_t workerId ){
                         m_currentFiles[workerId] = path.getPath();
                         addFile( path.getPath().string() );
                         m_currentFiles[workerId] = "";
-
-                        m_filesDone = m_filesDone + 1.f;
                     } );
                 }
             } );
         }
     } );
 
-
-
     while( m_runBackground )
     {
-        std::list<FileGroup>::iterator it;
+        //std::list<FileGroup>::iterator it;
 
-        {
-            std::lock_guard<std::mutex> lock( m_filesMtx );
-            it = m_files.begin();
-        }
+        //{
+        //    std::lock_guard<std::mutex> lock( m_filesMtx );
+        //    it = m_files.begin();
+        //}
 
-        while( it != m_files.end() )
-        {
-            FileGroup& filePath = *it;
+        //while( it != m_files.end() )
+        //{
+        //    FileGroup& filePath = *it;
 
-            for( const auto& file: filePath.files )
-            {
-                if( file.exists() )
-                {
-                    addTask( [this, file] ( size_t workerId ){
-                        m_currentFiles[workerId] = file.getPath();
-                        addFile( file.getPath().string() );
-                        m_currentFiles[workerId] = "";
+        //    for( const auto& file: filePath.files )
+        //    {
+        //        if( file.exists() )
+        //        {
+        //            addTask( [this, file] ( size_t workerId ){
+        //                m_currentFiles[workerId] = file.getPath();
+        //                addFile( file.getPath().string() );
+        //                m_currentFiles[workerId] = "";
 
-                        m_filesDone = m_filesDone + 1.f;
-                    } );
-                }
-                else
-                {
-                    // here add to list for removal.
-                }
-            }
-            std::lock_guard<std::mutex> lock( m_filesMtx );
-            ++it;
-        }
+        //                m_filesDone = m_filesDone + 1.f;
+        //            } );
+        //        }
+        //        else
+        //        {
+        //            // here add to list for removal.
+        //        }
+        //    }
+        //    std::lock_guard<std::mutex> lock( m_filesMtx );
+        //    ++it;
+        //}
     }
 }
 
@@ -575,19 +551,19 @@ void App::saveDuplicatesToFile()
     m_culInterface->getLogger()->log( text );
     file->addLine( text );
 
-    std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> duplicatesCopy;
+    std::map<FileSize, FileGroup> duplicatesCopy;
 
     {
         std::lock_guard<std::mutex> lock( m_duplicatesMtx );
         duplicatesCopy = m_duplicates;
     }
 
-    for( const auto& sizesGroup : duplicatesCopy )
+    for( const auto& [fileSize, fileGroup] : duplicatesCopy )
     {
         bool foundDups = false;
-        for( const auto& md5Group : sizesGroup.second )
+        for( const auto& md5Group : fileGroup.MD5Group )
         {
-            if( md5Group.second.size() > 1 )
+            if( fileGroup.MD5Group.size() > 1 )
             {
                 foundDups = true;
                 break;
@@ -596,19 +572,19 @@ void App::saveDuplicatesToFile()
 
         if( foundDups )
         {
-            text = CUL::String( "Size: " ) + CUL::String( sizesGroup.first );
+            text = CUL::String( "Size: " ) + CUL::String( fileSize );
 
             file->addLine( text );
 
-            for( const auto& md5Group : sizesGroup.second )
+            for( const auto& [md5value, md5group] : fileGroup.MD5Group )
             {
-                if( md5Group.second.size() > 1 )
+                if( md5group.files.size() > 1 )
                 {
-                    text = CUL::String( "MD5: " ) + CUL::String( md5Group.first );
+                    text = CUL::String( "MD5: " ) + CUL::String( md5value );
                     file->addLine( text );
-                    for( const auto& paths : md5Group.second )
+                    for( const auto& fileOfGroup : md5group.files )
                     {
-                        file->addLine( paths );
+                        file->addLine( fileOfGroup );
                     }
                 }
             }
@@ -686,45 +662,6 @@ unsigned App::getTasksLeft()
     return result;
 }
 
-void App::removeDeletedFilesFromDB()
-{
-    getList();
-
-    const size_t deletionListSize = m_deletionList.size();
-
-    for( size_t i = 0; i < deletionListSize; ++i )
-    {
-        CUL::FS::Path path = m_deletionList[i];
-        if( !path.exists() )
-        {
-            removeFileFromDB( path );
-        }
-    }
-
-    m_deletionList.clear();
-}
-
-
-void App::removeFileFromDB( const CUL::String& path )
-{
-    std::string sqlQuery = std::string( "DELETE FROM FILES WHERE PATH='" ) + path.string() + "';";
-
-    char* zErrMsg = nullptr;
-    auto callback = []( void*, int, char**, char** )
-    {
-        // DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
-        return 0;
-    };
-
-    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
-
-    if( rc != SQLITE_OK )
-    {
-        CUL::Assert::simple( false, "DB ERROR!" );
-    }
-}
-
-
 void App::addFile( const CUL::String& path )
 {
     m_currentFileText = "Current file: " + path + ".";
@@ -736,7 +673,13 @@ void App::addFile( const CUL::String& path )
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
 
     auto modTime = file->getLastModificationTime();
-    auto modTimeFromDb = getModTimeFromDb( path );
+    auto info = m_fileDb.getFileInfo( path );
+    CUL::String modTimeFromDb;
+    if( info )
+    {
+        modTimeFromDb = info->ModTime;
+    }
+
     const auto modTimeFromFS = modTime.toString();
 
     CUL::String md5;
@@ -750,71 +693,98 @@ void App::addFile( const CUL::String& path )
     {
         md5 = file->getMD5();
         sizeBytes = file->getSizeBytes();
-        addFileToDb( md5, path, CUL::String( sizeBytes ), modTime.toString() );
+        m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTime.toString() );
     }
     else
     {
         m_culInterface->getLogger()->log( CUL::String( "Path: " ) + path + " found on cache." );
-        std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
-        auto it = m_filesFromDb.find( path );
-        md5 = it->second.md5;
-        sizeBytes = it->second.size;
+        md5 = info->MD5;
+        sizeBytes = info->Size;
     }
 
-    if( sizeBytes > m_minFileSize )
+    if( sizeBytes.toInt() > m_minFileSize )
     {
         std::lock_guard<std::mutex> lockMap( m_filesMtx );
 
-        auto it = std::find_if( m_files.begin(), m_files.end(), [path, sizeBytes, md5] ( const FileGroup& fg ){
+        auto groupIt = m_files.find( sizeBytes.toInt() );
+        if( groupIt == m_files.end() )
+        {
+            MD5Group md5group;
+            md5group.md5 = md5;
+            md5group.files.push_back( path );
 
-            if( fg.fileSize == sizeBytes.toUInt() )
+
+            FileGroup fg;
+            fg.fileSize = sizeBytes.toUInt();
+            fg.MD5Group[md5] = md5group;
+            m_files[fg.fileSize] = fg;
+        }
+        else // Found
+        {
+            // Basically, found that there is a group of same size and md5 - i assume, same files.
+
+            MD5Group* groupPtr = nullptr;
+            // Add to cache.
             {
-                if( fg.md5 == md5 )
+                auto& md5Group = groupIt->second.MD5Group;
+
+                auto md5It = md5Group.find( md5 );
+
+                if( md5It == md5Group.end() )
                 {
-                    return true;
+                    MD5Group newMd5Group;
+                    newMd5Group.md5 = md5;
+                    newMd5Group.files.push_back( path );
+                    md5Group[md5] = newMd5Group;
+                    groupPtr = &md5Group[md5];
+                }
+                else
+                {
+                    auto& filesSameSizeMd5 = md5It->second.files;
+                    auto fileIt = std::find_if( filesSameSizeMd5.begin(), filesSameSizeMd5.end(), [&path] ( const CUL::FS::Path& curr ){
+                        return curr == path;
+                    } );
+                    if( fileIt == filesSameSizeMd5.end() )
+                    {
+                        filesSameSizeMd5.push_back( path );
+                    }
+                    groupPtr = &md5It->second;
                 }
             }
 
-            return false;
-        } );
-
-        if( it == m_files.end() )
-        {
-            FileGroup fg;
-            fg.fileSize = sizeBytes.toUInt();
-            fg.md5 = md5;
-            fg.files.push_back( path );
-
-            m_files.push_back(fg);
-
-            m_files.sort( [] ( const FileGroup& fg1, const FileGroup& fg2 ){
-                return fg1.fileSize < fg2.fileSize;
-            } );
-        }
-        else
-        {
-            auto& filesOnSameSizeAndMD5 = it->files;
-
-            auto fileIt = std::find_if( filesOnSameSizeAndMD5.begin(), filesOnSameSizeAndMD5.end(), [path] (const CUL::FS::Path& curr){
-                return curr == path;
-            } );
-
-            if( fileIt == filesOnSameSizeAndMD5.end() )
             {
+                std::lock_guard<std::mutex> lock( m_duplicatesMtx );
+                auto duplicatesSizeGroupIt = m_duplicates.find( sizeBytes.toInt() );
+                if( duplicatesSizeGroupIt == m_duplicates.end() )
+                {
+                    FileGroup fg;
+                    fg.fileSize = sizeBytes.toInt();
+                    fg.MD5Group[md5] = *groupPtr;
 
-                filesOnSameSizeAndMD5.push_back( path );
-                filesOnSameSizeAndMD5.sort();
+                    m_duplicates[sizeBytes.toInt()] = fg;
+                }
+                else
+                {
+                    FileGroup& fg = duplicatesSizeGroupIt->second;
+                    auto duplicatesMd5GroupIt = fg.MD5Group.find( md5 );
+                    if( duplicatesMd5GroupIt == fg.MD5Group.end() )
+                    {
+                        fg.MD5Group[md5] = *groupPtr;
+                    }
+                    else
+                    {
+                        MD5Group& md5Group = duplicatesMd5GroupIt->second;
+                        md5Group = *groupPtr;
+                    }
+                }
             }
-
         }
     }
 
-    if( sizeBytes > m_minFileSize )
-    {
-        addDuplicate( sizeBytes.toUInt(), md5, path );
-    }
-    
-
+    //if( sizeBytes > m_minFileSize )
+    //{
+    //    addDuplicate( sizeBytes.toUInt(), md5, path );
+    //}
 
     m_frameTimer->stop();
     const auto& elapsed = m_frameTimer->getElapsed();
@@ -827,22 +797,6 @@ void App::addFile( const CUL::String& path )
     }
 
     delete m_frameTimer;
-
-    if( sizeBytes > m_minFileSize )
-    {
-        FileDb fileDb;
-        fileDb.md5 = md5;
-        fileDb.modTime = modTime.toString();
-        fileDb.size = sizeBytes;
-        fileDb.path = path;
-
-        std::lock_guard<std::mutex> lockGuard( m_allFilesMtx );
-        m_allFiles.push_back( fileDb );
-        std::sort( m_allFiles.begin(), m_allFiles.end(),
-                   [] ( const FileDb& fdb1, const FileDb& fdb2 )               {
-            return fdb1.md5 < fdb2.md5;
-        } );
-    }
 }
 
 void App::addFileToList( const CUL::String path )
@@ -860,137 +814,51 @@ void App::addFileToList( const CUL::String path )
 
 void App::addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& inPath )
 {
-    std::lock_guard<std::mutex> lockIn( m_filesMtx );
+    //std::lock_guard<std::mutex> lockIn( m_filesMtx );
 
-    auto it = std::find_if( m_files.begin(), m_files.end(), [fileSize, md5] ( const FileGroup& fg ){
+    //auto it = std::find_if( m_files.begin(), m_files.end(), [fileSize, md5] ( const FileGroup& fg ){
 
-        if( fg.fileSize == fileSize )
-        {
-            if( fg.md5 == md5 )
-            {
-                return true;
-            }
-        }
+    //    if( fg.fileSize == fileSize )
+    //    {
+    //        if( fg.md5 == md5 )
+    //        {
+    //            return true;
+    //        }
+    //    }
 
-        return false;
-    } );
+    //    return false;
+    //} );
 
-    if( it != m_files.end() )
-    {
-        auto fileIt = std::find_if( it->files.begin(), it->files.end(), [inPath] ( const CUL::FS::Path& path ){return inPath == path; } );
+    //if( it != m_files.end() )
+    //{
+    //    auto fileIt = std::find_if( it->files.begin(), it->files.end(), [inPath] ( const CUL::FS::Path& path ){return inPath == path; } );
 
-        if( fileIt != it->files.end() )
-        {
-            std::lock_guard<std::mutex> lockOut( m_duplicatesMtx );
-            std::map<MD5Value, std::set<CUL::FS::Path>>& md5Map = m_duplicates[fileSize];
+    //    if( fileIt != it->files.end() )
+    //    {
+    //        std::lock_guard<std::mutex> lockOut( m_duplicatesMtx );
+    //        std::map<MD5Value, std::set<CUL::FS::Path>>& md5Map = m_duplicates[fileSize];
 
-            std::set<CUL::FS::Path>& dupVec = md5Map[md5];
-            dupVec.clear();
+    //        std::set<CUL::FS::Path>& dupVec = md5Map[md5];
+    //        dupVec.clear();
 
-            for( const auto& path : it->files )
-            {
-                dupVec.insert( path );
-            }
-        }
-    }
-}
-
-void App::addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime )
-{
-    if( filePath.contains( "science_in_this_shit" ) )
-    {
-        auto x = 0;
-    }
-
-    CUL::String result;
-    CUL::String filePathNormalized = filePath;
-    filePathNormalized.replace( "./", "" );
-    filePathNormalized.replace( "'", "''" );
-    filePathNormalized.removeAll( '\0' );
-    CUL::String sqlQuery = "INSERT INTO FILES (PATH, SIZE, MD5, LAST_MODIFICATION ) VALUES ('" + filePathNormalized + "', '" + fileSize +
-                           "', '" + md5 + "', '" + modTime + "');";
-
-    char* zErrMsg = nullptr;
-    auto callback = []( void*, int, char**, char** )
-    {
-        // DuplicateFinder::s_instance->callback( NotUsed, argc, argv, azColName );
-        return 0;
-    };
-
-    int rc = sqlite3_exec( m_db, sqlQuery.cStr(), callback, 0, &zErrMsg );
-
-    if( rc != SQLITE_OK )
-    {
-        CUL::Assert::simple( false, "DB ERROR!" );
-    }
+    //        for( const auto& path : it->files )
+    //        {
+    //            dupVec.insert( path );
+    //        }
+    //    }
+    //}
 }
 
 CUL::String App::getModTimeFromDb( const CUL::String& filePath )
 {
-    getParametersFromDb( filePath );
-    CUL::String result;
-    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
-    auto it = m_filesFromDb.find( filePath );
-    if( it != m_filesFromDb.end() )
-    {
-        result = it->second.modTime;
-    }
-    return result;
-}
+    auto info = m_fileDb.getFileInfo( filePath );
 
-
-void App::getParametersFromDb( const CUL::String& filePath )
-{
-    if( filePath.contains( "science_in_this_shit" ) )
+    if( info )
     {
-        auto x = 0;
+        return info->Path.getLastModificationTime().toString();
     }
 
-    CUL::String filePathNormalized = filePath;
-    filePathNormalized.replace( "./", "" );
-    filePathNormalized.removeAll( '\0' );
-    filePathNormalized.replace( "'", "''" );
-    std::string sqlQuery =
-        std::string( "SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES WHERE PATH='" ) + filePathNormalized.string() + "';";
-    char* zErrMsg = nullptr;
-
-
-
-    auto callback = []( void*, int argc, char** argv, char** )
-    {
-        std::vector<CUL::String> values;
-        for( int i = 0; i < argc; ++i )
-        {
-            CUL::String value = argv[i];
-            values.push_back( value );
-        }
-        s_instance->addFileFromDb( values[0], values[1], values[2], values[3] );
-        return 0;
-    };
-
-    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
-
-    if( rc != SQLITE_OK )
-    {
-        CUL::Assert::simple( false, "DB ERROR!" );
-    }
-}
-
-
-void App::addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime )
-{
-    std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
-
-    if( path.contains("science_in_this_shit") )
-    {
-        auto x = 0;
-    }
-
-    FileDb fdb;
-    fdb.size = size;
-    fdb.md5 = md;
-    fdb.modTime = modTime;
-    m_filesFromDb[path] = fdb;
+    return "";
 }
 
 void App::addForCheckForDeletionList( const CUL::String& inPath )
@@ -1011,20 +879,6 @@ void App::addForCheckForDeletionList( const CUL::String& inPath )
 
 void App::getList()
 {
-    std::string sqlQuery = std::string( "SELECT PATH, SIZE, MD5, LAST_MODIFICATION FROM FILES" );
-    auto callback = []( void*, int /* argc */, char** argv, char** )
-    {
-        s_instance->addForCheckForDeletionList( argv[0] );
-        return 0;
-    };
-
-    char* zErrMsg = nullptr;
-    int rc = sqlite3_exec( m_db, sqlQuery.c_str(), callback, 0, &zErrMsg );
-
-    if( rc != SQLITE_OK )
-    {
-        CUL::Assert::simple( false, "DB ERROR!" );
-    }
 }
 
 void App::printCurrentMean()

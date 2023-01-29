@@ -6,6 +6,7 @@
 #include "SDL2Wrapper/IWindow.hpp"
 #include "SDL2Wrapper/Input/MouseData.hpp"
 
+#include "CUL/Filesystem/FileDatabase.hpp"
 #include "CUL/Filesystem/IFile.hpp"
 #include "CUL/Threading/ThreadWrap.hpp"
 #include "CUL/Threading/Worker.hpp"
@@ -34,12 +35,16 @@ using MD5Value = CUL::String;
 using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
 
 
-//std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
+struct MD5Group
+{
+    MD5Value md5;
+    std::list<CUL::FS::Path> files;
+};
+
 struct FileGroup
 {
     FileSize fileSize = 0u;
-    MD5Value md5;
-    std::list<CUL::FS::Path> files;
+    std::map<MD5Value, MD5Group> MD5Group;
 };
 
 class App final: public LOGLW::IGameEngineApp
@@ -47,7 +52,6 @@ class App final: public LOGLW::IGameEngineApp
 public:
     App( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath );
 
-    void addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime );
     void addForCheckForDeletionList( const CUL::String& path );
 
     int callback( void* NotUsed, int argc, char** argv, char** azColName );
@@ -57,9 +61,7 @@ public:
 
 protected:
 private:
-    void removeDeletedFilesFromDB();
     void getList();
-    void removeFileFromDB( const CUL::String& path );
 
     struct FileDb
     {
@@ -89,10 +91,7 @@ private:
     std::function<void(size_t)> getTask();
     void workerThreadMethod();
     unsigned getTasksLeft();
-    void initDb();
-    void addFileToDb( MD5Value md5, const CUL::String& filePath, const CUL::String& fileSize, const CUL::String& modTime );
     CUL::String getModTimeFromDb( const CUL::String& filePath );
-    void getParametersFromDb( const CUL::String& filePath );
     void printCurrentMean();
 
     glm::vec3 moveOnSphere( float yaw, float pitch, float row, float rad );
@@ -139,7 +138,7 @@ private:
     std::vector<CUL::String> m_currentFiles;
 
     std::mutex m_duplicatesMtx;
-    std::map<FileSize, std::map<MD5Value, std::set<CUL::FS::Path>>> m_duplicates;
+    std::map<FileSize, FileGroup> m_duplicates;
 
     std::atomic_bool m_workersEnabled = false;
 
@@ -149,15 +148,11 @@ private:
     std::mutex m_tasksMtx;
     std::vector<std::function<void(size_t)>> m_tasks;
 
-    std::mutex m_filesFromDbMtx;
-    std::map<CUL::String, FileDb> m_filesFromDb;
-
     std::atomic<float> m_filesCount = 0.f;
     std::atomic<float> m_filesDone = 0.f;
 
     int m_last = 101;
 
-    struct sqlite3* m_db = nullptr;
     CUL::String m_empty;
 
     std::mutex m_fileAddTasksDurationMtx;
@@ -168,8 +163,6 @@ private:
 
     std::vector<CUL::String> m_deletionList;
 
-    std::mutex m_allFilesMtx;
-    std::vector<FileDb> m_allFiles;
 
     std::thread m_searchThread;
 
@@ -185,12 +178,14 @@ private:
 
     CUL::Worker m_genericWorker;
 
+    std::mutex m_foundFileMtx;
     CUL::String m_foundFile;
 
     std::mutex m_filesMtx;
-    std::list<FileGroup> m_files;
+    std::map<FileSize, FileGroup> m_files;
 
     int m_minFileSize = 2000;
 
     bool m_initialDbFilesUpdated = false;
+    CUL::FS::FileDatabase m_fileDb;
 };
