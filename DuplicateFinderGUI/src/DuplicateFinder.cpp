@@ -13,6 +13,7 @@
 #include "CUL/Filesystem/FileFactory.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/GenericUtils/ConsoleUtilities.hpp"
+#include "CUL/GenericUtils/ScopeExit.hpp"
 #include "CUL/Threading/ThreadUtils.hpp"
 
 #include "CUL/STL_IMPORTS/STD_future.hpp"
@@ -27,6 +28,7 @@ App* App::s_instance = nullptr;
 App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
+    m_outputFile = "C:\\Users\\Bart³omiej Kordek\\Desktop\\out.txt";
 }
 
 void App::onInit()
@@ -560,32 +562,19 @@ void App::saveDuplicatesToFile()
 
     for( const auto& [fileSize, fileGroup] : duplicatesCopy )
     {
-        bool foundDups = false;
-        for( const auto& md5Group : fileGroup.MD5Group )
+        text = CUL::String( "Size: " ) + CUL::String( fileSize );
+
+        file->addLine( text );
+
+        for( const auto& [md5value, md5group] : fileGroup.MD5Group )
         {
-            if( fileGroup.MD5Group.size() > 1 )
+            if( md5group.files.size() > 1 )
             {
-                foundDups = true;
-                break;
-            }
-        }
-
-        if( foundDups )
-        {
-            text = CUL::String( "Size: " ) + CUL::String( fileSize );
-
-            file->addLine( text );
-
-            for( const auto& [md5value, md5group] : fileGroup.MD5Group )
-            {
-                if( md5group.files.size() > 1 )
+                text = CUL::String( "MD5: " ) + CUL::String( md5value );
+                file->addLine( text );
+                for( const auto& fileOfGroup : md5group.files )
                 {
-                    text = CUL::String( "MD5: " ) + CUL::String( md5value );
-                    file->addLine( text );
-                    for( const auto& fileOfGroup : md5group.files )
-                    {
-                        file->addLine( fileOfGroup );
-                    }
+                    file->addLine( fileOfGroup );
                 }
             }
         }
@@ -685,6 +674,19 @@ void App::addFile( const CUL::String& path )
     CUL::String md5;
     CUL::String sizeBytes;
 
+    CUL::GUTILS::ScopeExit se( [&m_frameTimer,this] (){
+        m_frameTimer->stop();
+        const auto& elapsed = m_frameTimer->getElapsed();
+        const unsigned elapsedUi = elapsed.getMs();
+        m_fileAddTasksDuration.push_back( elapsedUi );
+        delete m_frameTimer;
+
+        if( m_fileAddTasksDuration.size() > m_maxTasksDurationSamples )
+        {
+            m_fileAddTasksDuration.pop_front();
+        }
+    } );
+
     if( path.contains( "science_in_this_shit" ) )
     {
         auto x = 0;
@@ -702,151 +704,100 @@ void App::addFile( const CUL::String& path )
         sizeBytes = info->Size;
     }
 
-    if( sizeBytes.toInt() > m_minFileSize )
+    if( sizeBytes.toInt() < m_minFileSize )
     {
-        std::lock_guard<std::mutex> lockMap( m_filesMtx );
+        return;
+    }
+    std::lock_guard<std::mutex> lockMap( m_filesMtx );
 
-        auto groupIt = m_files.find( sizeBytes.toInt() );
-        if( groupIt == m_files.end() )
+    bool foundDuplicates = false;
+
+    auto groupIt = m_files.find( sizeBytes.toInt() );
+    if( groupIt == m_files.end() )
+    {
+        MD5Group md5group;
+        md5group.md5 = md5;
+        md5group.files.push_back( path );
+
+        FileGroup fg;
+        fg.fileSize = sizeBytes.toUInt();
+        fg.MD5Group[md5] = md5group;
+        m_files[fg.fileSize] = fg;
+        m_culInterface->getLogger()->log( CUL::String( "Added: " ) + path );
+    }
+    else
+    {
+        MD5Group* groupPtr = nullptr;
         {
-            MD5Group md5group;
-            md5group.md5 = md5;
-            md5group.files.push_back( path );
+            auto& md5Group = groupIt->second.MD5Group;
 
+            auto md5It = md5Group.find( md5 );
 
-            FileGroup fg;
-            fg.fileSize = sizeBytes.toUInt();
-            fg.MD5Group[md5] = md5group;
-            m_files[fg.fileSize] = fg;
-        }
-        else // Found
-        {
-            // Basically, found that there is a group of same size and md5 - i assume, same files.
-
-            MD5Group* groupPtr = nullptr;
-            // Add to cache.
+            if( md5It == md5Group.end() )
             {
-                auto& md5Group = groupIt->second.MD5Group;
-
-                auto md5It = md5Group.find( md5 );
-
-                if( md5It == md5Group.end() )
+                MD5Group newMd5Group;
+                newMd5Group.md5 = md5;
+                newMd5Group.files.push_back( path );
+                m_culInterface->getLogger()->log( CUL::String( "Added: " ) + path );
+                md5Group[md5] = newMd5Group;
+                groupPtr = &md5Group[md5];
+            }
+            else
+            {
+                auto& filesSameSizeMd5 = md5It->second.files;
+                auto fileIt = std::find_if( filesSameSizeMd5.begin(), filesSameSizeMd5.end(), [&path] ( const CUL::FS::Path& curr ){
+                    return curr == path;
+                } );
+                if( fileIt == filesSameSizeMd5.end() )
                 {
-                    MD5Group newMd5Group;
-                    newMd5Group.md5 = md5;
-                    newMd5Group.files.push_back( path );
-                    md5Group[md5] = newMd5Group;
-                    groupPtr = &md5Group[md5];
+                    filesSameSizeMd5.push_back( path );
+                    m_culInterface->getLogger()->log( CUL::String( "Added: " ) + path );
                 }
-                else
+                groupPtr = &md5It->second;
+
+                if( filesSameSizeMd5.size() > 1 )
                 {
-                    auto& filesSameSizeMd5 = md5It->second.files;
-                    auto fileIt = std::find_if( filesSameSizeMd5.begin(), filesSameSizeMd5.end(), [&path] ( const CUL::FS::Path& curr ){
-                        return curr == path;
-                    } );
-                    if( fileIt == filesSameSizeMd5.end() )
-                    {
-                        filesSameSizeMd5.push_back( path );
-                    }
-                    groupPtr = &md5It->second;
+                    foundDuplicates = true;
                 }
             }
+        }
 
+        if( foundDuplicates )
+        {
+            std::lock_guard<std::mutex> lock( m_duplicatesMtx );
+            auto duplicatesSizeGroupIt = m_duplicates.find( sizeBytes.toInt() );
+            if( duplicatesSizeGroupIt == m_duplicates.end() )
             {
-                std::lock_guard<std::mutex> lock( m_duplicatesMtx );
-                auto duplicatesSizeGroupIt = m_duplicates.find( sizeBytes.toInt() );
-                if( duplicatesSizeGroupIt == m_duplicates.end() )
+                FileGroup fg;
+                fg.fileSize = sizeBytes.toInt();
+                fg.MD5Group[md5] = *groupPtr;
+
+                m_duplicates[sizeBytes.toInt()] = fg;
+            }
+            else
+            {
+                FileGroup& fg = duplicatesSizeGroupIt->second;
+                auto duplicatesMd5GroupIt = fg.MD5Group.find( md5 );
+                if( duplicatesMd5GroupIt == fg.MD5Group.end() )
                 {
-                    FileGroup fg;
-                    fg.fileSize = sizeBytes.toInt();
                     fg.MD5Group[md5] = *groupPtr;
-
-                    m_duplicates[sizeBytes.toInt()] = fg;
                 }
                 else
                 {
-                    FileGroup& fg = duplicatesSizeGroupIt->second;
-                    auto duplicatesMd5GroupIt = fg.MD5Group.find( md5 );
-                    if( duplicatesMd5GroupIt == fg.MD5Group.end() )
-                    {
-                        fg.MD5Group[md5] = *groupPtr;
-                    }
-                    else
-                    {
-                        MD5Group& md5Group = duplicatesMd5GroupIt->second;
-                        md5Group = *groupPtr;
-                    }
+                    MD5Group& md5Group = duplicatesMd5GroupIt->second;
+                    md5Group = *groupPtr;
                 }
             }
         }
     }
-
-    //if( sizeBytes > m_minFileSize )
-    //{
-    //    addDuplicate( sizeBytes.toUInt(), md5, path );
-    //}
-
-    m_frameTimer->stop();
-    const auto& elapsed = m_frameTimer->getElapsed();
-    const unsigned elapsedUi = elapsed.getMs();
-    m_fileAddTasksDuration.push_back( elapsedUi );
-
-    if( m_fileAddTasksDuration.size() > m_maxTasksDurationSamples )
-    {
-        m_fileAddTasksDuration.pop_front();
-    }
-
-    delete m_frameTimer;
 }
 
 void App::addFileToList( const CUL::String path )
 {
-    //std::lock_guard<std::mutex> lockMap( m_allFilestMtx );
-    //auto it = std::find( m_allFilesList.begin(), m_allFilesList.end(), path );
-    //if( it == m_allFilesList.end() )
-    //{
-    //    m_allFilesList.push_back( path );
-    //    std::sort( m_allFilesList.begin(), m_allFilesList.end() );
-    //}
-
-    //m_foundFile = path;
 }
 
 void App::addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& inPath )
 {
-    //std::lock_guard<std::mutex> lockIn( m_filesMtx );
-
-    //auto it = std::find_if( m_files.begin(), m_files.end(), [fileSize, md5] ( const FileGroup& fg ){
-
-    //    if( fg.fileSize == fileSize )
-    //    {
-    //        if( fg.md5 == md5 )
-    //        {
-    //            return true;
-    //        }
-    //    }
-
-    //    return false;
-    //} );
-
-    //if( it != m_files.end() )
-    //{
-    //    auto fileIt = std::find_if( it->files.begin(), it->files.end(), [inPath] ( const CUL::FS::Path& path ){return inPath == path; } );
-
-    //    if( fileIt != it->files.end() )
-    //    {
-    //        std::lock_guard<std::mutex> lockOut( m_duplicatesMtx );
-    //        std::map<MD5Value, std::set<CUL::FS::Path>>& md5Map = m_duplicates[fileSize];
-
-    //        std::set<CUL::FS::Path>& dupVec = md5Map[md5];
-    //        dupVec.clear();
-
-    //        for( const auto& path : it->files )
-    //        {
-    //            dupVec.insert( path );
-    //        }
-    //    }
-    //}
 }
 
 CUL::String App::getModTimeFromDb( const CUL::String& filePath )
