@@ -84,7 +84,7 @@ private:
     void searchBackground();
     std::atomic_bool m_runBackground = false;
 
-    void addFile( const CUL::String& path );
+    void addFile( const CUL::String& path, size_t workerId );
     void addFileToList( const CUL::String path );
 
     void addTask( std::function<void( size_t )> task );
@@ -102,6 +102,9 @@ private:
 
     void startWorkers();
     void saveDuplicatesToFile();
+    void setWorkerStatus( const CUL::String& status, size_t workerId );
+    void searchAllFiles();
+    std::mutex m_workerStatusMtx;
 
     CUL::String m_outputFile;
     std::vector<CUL::String> m_searchPaths;
@@ -134,7 +137,7 @@ private:
 
 
     CUL::CULInterface* m_culInterface = nullptr;
-    size_t m_maxThreadCount = 5;
+    size_t m_maxThreadCount = 7;
     std::vector<CUL::String> m_currentFiles;
 
     std::mutex m_duplicatesMtx;
@@ -156,8 +159,6 @@ private:
     CUL::String m_empty;
 
     std::mutex m_fileAddTasksDurationMtx;
-    // m_fileAddTasksDuration replace with circular
-    //std::vector<unsigned> m_fileAddTasksDuration;
     size_t m_maxTasksDurationSamples = 256;
     std::deque<unsigned> m_fileAddTasksDuration;
 

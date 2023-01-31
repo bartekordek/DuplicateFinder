@@ -29,6 +29,7 @@ App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const 
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
     m_outputFile = "C:\\Users\\Bart³omiej Kordek\\Desktop\\out.txt";
+    m_maxThreadCount = 1;
 }
 
 void App::onInit()
@@ -237,7 +238,11 @@ void App::guiIteration()
     {
         for( size_t i = 0; i < m_maxThreadCount; ++i )
         {
-            const CUL::String currentFileText = "CURRENT FILE ON " + CUL::String( (int)i ) + CUL::String( " " ) + m_currentFiles[i];
+            CUL::String currentFileText;
+            {
+                std::lock_guard<std::mutex> lock( m_workerStatusMtx );
+                currentFileText = m_currentFiles[i];
+            }
 
             const auto someString = wstring_to_utf8( currentFileText.getString() );
 
@@ -426,7 +431,7 @@ void App::searchOneTime()
             m_filesCount = m_filesCount + 1.f;
             addTask( [this, path] ( size_t workerId ){
                 m_currentFiles[workerId] = path.getPath();
-                addFile( path.getPath().string() );
+                addFile( path.getPath().string(), workerId );
                 m_currentFiles[workerId] = "";
 
                 m_filesDone = m_filesDone + 1.f;
@@ -449,6 +454,12 @@ void App::searchOneTime()
     m_culInterface->getLogger()->log( "\nDONE.");
 }
 
+void App::setWorkerStatus( const CUL::String& status, size_t workerId )
+{
+    std::lock_guard<std::mutex> lock( m_workerStatusMtx );
+    m_currentFiles[workerId] = status;
+}
+
 void App::searchBackground()
 {
     auto culFF = m_culInterface->getFS();
@@ -461,6 +472,10 @@ void App::searchBackground()
         m_initialDbFilesUpdated = true;
 
         m_culInterface->getLogger()->log( "removeDeletedFilesFromDB::STOP" );
+
+        m_genericWorker.addTask( [this] (){
+            searchAllFiles();
+        } );
     } );
 
     m_updateDeletedFiles.setRemoveTasksWhenConsumed( true );
@@ -484,30 +499,8 @@ void App::searchBackground()
 
 
     m_genericWorker.setThreadName( "m_genericWorker" );
-    m_genericWorker.setRemoveTasksWhenConsumed( true );
+    m_genericWorker.setRemoveTasksWhenConsumed( false );
     m_genericWorker.run();
-
-    m_genericWorker.addTask( [this, culFF] (){
-        for( const auto& m_searchPath : m_searchPaths )
-        {
-            culFF->ListAllFiles( m_searchPath, [this] ( const CUL::FS::Path& path ){
-
-                if( !path.getIsDir() )
-                {
-                    {
-                        std::lock_guard<std::mutex> guard( m_foundFileMtx );
-                        m_foundFile = path.getPath();
-                    }
-                   
-                    addTask( [this, path] ( size_t workerId ){
-                        m_currentFiles[workerId] = path.getPath();
-                        addFile( path.getPath().string() );
-                        m_currentFiles[workerId] = "";
-                    } );
-                }
-            } );
-        }
-    } );
 
     while( m_runBackground )
     {
@@ -542,6 +535,28 @@ void App::searchBackground()
         //    std::lock_guard<std::mutex> lock( m_filesMtx );
         //    ++it;
         //}
+    }
+}
+
+void App::searchAllFiles()
+{
+    auto culFF = m_culInterface->getFS();
+    for( const auto& m_searchPath : m_searchPaths )
+    {
+        culFF->ListAllFiles( m_searchPath, [this] ( const CUL::FS::Path& path ){
+
+            if( !path.getIsDir() )
+            {
+                {
+                    std::lock_guard<std::mutex> guard( m_foundFileMtx );
+                    m_foundFile = path.getPath();
+                }
+
+                addTask( [this, path] ( size_t workerId ){
+                    addFile( path.getPath().string(), workerId );
+                } );
+            }
+        } );
     }
 }
 
@@ -651,21 +666,27 @@ unsigned App::getTasksLeft()
     return result;
 }
 
-void App::addFile( const CUL::String& path )
+void App::addFile( const CUL::String& path, size_t workerId )
 {
     m_currentFileText = "Current file: " + path + ".";
+    setWorkerStatus( "[START]" + path, workerId );
 
     CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer( m_logger );
     m_frameTimer->start();
 
     std::unique_ptr<CUL::FS::IFile> file;
+
+    setWorkerStatus( "[Load file]" + path, workerId );
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
 
+    setWorkerStatus( "[Get last mod time]" + path, workerId );
     auto modTime = file->getLastModificationTime();
+    setWorkerStatus( "[Get DB info]" + path, workerId );
     auto info = m_fileDb.getFileInfo( path );
     CUL::String modTimeFromDb;
     if( info )
     {
+        setWorkerStatus( "[Get DB info done]" + path, workerId );
         modTimeFromDb = info->ModTime;
     }
 
@@ -687,15 +708,15 @@ void App::addFile( const CUL::String& path )
         }
     } );
 
-    if( path.contains( "science_in_this_shit" ) )
-    {
-        auto x = 0;
-    }
     if( modTimeFromFS != modTimeFromDb )
     {
+        setWorkerStatus( "[File changed, calcualte md5...]" + path, workerId );
         md5 = file->getMD5();
+        setWorkerStatus( "[File changed, calcualte md5 done.]" + path, workerId );
         sizeBytes = file->getSizeBytes();
+        setWorkerStatus( "[File adding to db...]" + path, workerId );
         m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTime.toString() );
+        setWorkerStatus( "[File adding to db... done.]" + path, workerId );
     }
     else
     {
@@ -706,6 +727,7 @@ void App::addFile( const CUL::String& path )
 
     if( sizeBytes.toInt() < m_minFileSize )
     {
+        setWorkerStatus( "[File to small, aborting.]" + path, workerId );
         return;
     }
     std::lock_guard<std::mutex> lockMap( m_filesMtx );
@@ -790,6 +812,7 @@ void App::addFile( const CUL::String& path )
             }
         }
     }
+    setWorkerStatus( "[Done.]" + path, workerId );
 }
 
 void App::addFileToList( const CUL::String path )
