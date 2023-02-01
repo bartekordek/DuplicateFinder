@@ -30,7 +30,7 @@ class TransformComponent;
 class Quad;
 NAMESPACE_END( LOGLW )
 
-using FileSize = unsigned;
+using FileSize = int64_t;
 using MD5Value = CUL::String;
 using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
 

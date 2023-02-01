@@ -2,9 +2,13 @@
 cmake_minimum_required(VERSION 3.0.0)
 
 get_filename_component( basename ${CMAKE_CURRENT_SOURCE_DIR} NAME )
-project( ${basename} LANGUAGES CXX)
+
 set(CMAKE_CXX_STANDARD 17)
-set(EXEC ${basename})
+set(PROJECT_NAME_DYNAMIC ${basename}_dynamic)
+set(PROJECT_NAME_STATIC ${basename}_static)
+
+project( ${PROJECT_NAME_DYNAMIC} LANGUAGES CXX)
+project( ${PROJECT_NAME_STATIC} LANGUAGES CXX)
 
 if (MSVC)
     add_compile_options( /W2 )
@@ -23,20 +27,33 @@ file( GLOB_RECURSE SOURCES *.h *.hpp *.cpp *.vert *.frag )
 message( "${EXEC}: ${SOURCES} " )
 source_group( TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES} )
 
-add_executable( ${EXEC} ${SOURCES} )
+add_executable( ${PROJECT_NAME_DYNAMIC} ${SOURCES} )
+add_executable( ${PROJECT_NAME_STATIC} ${SOURCES} )
 
 if (MSVC)
     set_target_properties(
-        ${EXEC}
+        ${PROJECT_NAME_DYNAMIC}
         PROPERTIES
-            OUTPUT_NAME ${EXEC}
+            OUTPUT_NAME ${PROJECT_NAME_DYNAMIC}
+            SUFFIX ".exe"
+    )
+    set_target_properties(
+        ${PROJECT_NAME_STATIC}
+        PROPERTIES
+            OUTPUT_NAME ${PROJECT_NAME_STATIC}
             SUFFIX ".exe"
     )
 else()
     set_target_properties(
-        ${EXEC}
+        ${PROJECT_NAME_DYNAMIC}
         PROPERTIES
-            OUTPUT_NAME ${EXEC}
+            OUTPUT_NAME ${PROJECT_NAME_DYNAMIC}
+            SUFFIX ".bin"
+    )
+    set_target_properties(
+        ${PROJECT_NAME_STATIC}
+        PROPERTIES
+            OUTPUT_NAME ${PROJECT_NAME_STATIC}
             SUFFIX ".bin"
     )
 endif()
@@ -44,19 +61,39 @@ endif()
 IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
+set( DEPENDENCIES_STATIC
+PRIVATE gameengine_static
+PRIVATE AdditionalDeps
+nfd
+)
 
-set( DEPENDENCIES gameengine_dynamic AdditionalDeps nfd )
+set( DEPENDENCIES_DYNAMIC
+PRIVATE gameengine_dynamic
+PRIVATE AdditionalDeps
+nfd
+)
 
 if( MSVC )
-    target_link_options(${EXEC} PUBLIC "/INCREMENTAL:NO")
-    target_link_libraries( ${EXEC} ${DEPENDENCIES} )
+    target_link_options(${PROJECT_NAME_DYNAMIC} PUBLIC "/INCREMENTAL:NO")
+    target_link_options(${PROJECT_NAME_STATIC} PUBLIC "/INCREMENTAL:NO")
+
+    target_link_libraries( ${PROJECT_NAME_DYNAMIC} ${DEPENDENCIES_DYNAMIC} )
+    target_link_libraries( ${PROJECT_NAME_STATIC} ${DEPENDENCIES_STATIC} )
+
+    set_target_properties( ${PROJECT_NAME_STATIC} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} )
+    set_target_properties( ${PROJECT_NAME_STATIC} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} )
 else()
-    target_link_libraries( ${EXEC} ${DEPENDENCIES} stdc++fs  )
+    target_link_libraries( ${PROJECT_NAME_DYNAMIC} ${DEPENDENCIES_DYNAMIC} stdc++fs  )
+    target_link_libraries( ${PROJECT_NAME_STATIC} ${DEPENDENCIES_STATIC} stdc++fs  )
 endif()
 
-target_include_directories(${EXEC} PRIVATE inc)
-target_include_directories(${EXEC} PRIVATE src)
+target_include_directories(${PROJECT_NAME_DYNAMIC} PRIVATE inc)
+target_include_directories(${PROJECT_NAME_DYNAMIC} PRIVATE src)
+
+target_include_directories(${PROJECT_NAME_STATIC} PRIVATE inc)
+target_include_directories(${PROJECT_NAME_STATIC} PRIVATE src)
 
 if( MSVC )
-    set_property(TARGET ${EXEC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_property(TARGET ${EXEPROJECT_NAME_STATICC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_property(TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

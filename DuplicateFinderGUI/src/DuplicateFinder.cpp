@@ -28,8 +28,8 @@ App* App::s_instance = nullptr;
 App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
-    m_outputFile = "C:\\Users\\Bart³omiej Kordek\\Desktop\\out.txt";
-    m_maxThreadCount = 1;
+    m_outputFile = "D:\\out.txt";
+    m_maxThreadCount = 12;
 }
 
 void App::onInit()
@@ -160,19 +160,19 @@ void App::guiIteration()
     ImGui::Text( m_outputFile.cStr() );
 
     {
-        CUL::String textCopy;
+        std::string textCopy;
         {
             std::lock_guard<std::mutex> guard( m_foundFileMtx );
             {
-                textCopy = m_foundFile;
+                textCopy = m_foundFile.string();
             }
         }
 
-        if( !textCopy.empty() )
+        if( false && !textCopy.empty() )
         {
             ImGui::Text( "Found file: " );
             ImGui::SameLine();
-            ImGui::Text( textCopy.cStr() );
+            ImGui::Text( textCopy.c_str() );
         }
     }
 
@@ -553,7 +553,8 @@ void App::searchAllFiles()
                 }
 
                 addTask( [this, path] ( size_t workerId ){
-                    addFile( path.getPath().string(), workerId );
+                    CUL::String pathAsString = path.getPath();
+                    addFile( pathAsString, workerId );
                 } );
             }
         } );
@@ -668,7 +669,6 @@ unsigned App::getTasksLeft()
 
 void App::addFile( const CUL::String& path, size_t workerId )
 {
-    m_currentFileText = "Current file: " + path + ".";
     setWorkerStatus( "[START]" + path, workerId );
 
     CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer( m_logger );
@@ -725,7 +725,9 @@ void App::addFile( const CUL::String& path, size_t workerId )
         sizeBytes = info->Size;
     }
 
-    if( sizeBytes.toInt() < m_minFileSize )
+    auto sizeBytesAsInt = sizeBytes.toInt64();
+
+    if( sizeBytesAsInt < m_minFileSize )
     {
         setWorkerStatus( "[File to small, aborting.]" + path, workerId );
         return;
@@ -734,7 +736,7 @@ void App::addFile( const CUL::String& path, size_t workerId )
 
     bool foundDuplicates = false;
 
-    auto groupIt = m_files.find( sizeBytes.toInt() );
+    auto groupIt = m_files.find( sizeBytesAsInt );
     if( groupIt == m_files.end() )
     {
         MD5Group md5group;
@@ -787,14 +789,15 @@ void App::addFile( const CUL::String& path, size_t workerId )
         if( foundDuplicates )
         {
             std::lock_guard<std::mutex> lock( m_duplicatesMtx );
-            auto duplicatesSizeGroupIt = m_duplicates.find( sizeBytes.toInt() );
+            auto sizeBytesAsInt = sizeBytes.toInt64();
+            auto duplicatesSizeGroupIt = m_duplicates.find( sizeBytesAsInt );
             if( duplicatesSizeGroupIt == m_duplicates.end() )
             {
                 FileGroup fg;
-                fg.fileSize = sizeBytes.toInt();
+                fg.fileSize = sizeBytesAsInt;
                 fg.MD5Group[md5] = *groupPtr;
 
-                m_duplicates[sizeBytes.toInt()] = fg;
+                m_duplicates[sizeBytesAsInt] = fg;
             }
             else
             {
@@ -829,7 +832,7 @@ CUL::String App::getModTimeFromDb( const CUL::String& filePath )
 
     if( info )
     {
-        return info->Path.getLastModificationTime().toString();
+        return info->FilePath.getLastModificationTime().toString();
     }
 
     return "";
