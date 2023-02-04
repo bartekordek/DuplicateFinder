@@ -176,6 +176,17 @@ void App::guiIteration()
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock( m_statusMutex );
+        if( !m_statusText.empty() )
+        {
+            ImGui::Text( "Search status: " );
+            ImGui::SameLine();
+            std::string status = m_statusText.string();
+            ImGui::Text( status.c_str() );
+        }
+    }
+
 
     static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
 
@@ -251,10 +262,14 @@ void App::guiIteration()
     }
 
 
-    for( const auto& [filesize, flieGroup] : m_duplicates )
+    for( const auto& [fileSizeAsBytes, flieGroup] : m_duplicates )
     {
         const size_t md5Count = flieGroup.MD5Group.size();
-        const CUL::String m_fileSizeString = "Size: " + CUL::String( filesize ) + ", MD5 count: " + CUL::String( (int)md5Count );
+
+
+        float MegaBytes = 1.f * fileSizeAsBytes / ( 1.f * bytesINMegabyte );
+
+        const CUL::String m_fileSizeString = "Size: " + CUL::String( MegaBytes ) + "MB, MD5 count: " + CUL::String( (int)md5Count );
 
         bool show = false;
         for( const auto& [md5value, paths] : flieGroup.MD5Group )
@@ -466,14 +481,17 @@ void App::searchBackground()
     m_updateDeletedFiles.addTask( [this] (){
         m_culInterface->getLogger()->log( "removeDeletedFilesFromDB::START" );
 
+        setMainStatus( "Loading database..." );
+        m_loadingDb = true;
         m_fileDb.loadFilesFromDatabase();
-        m_fileDb.removeFilesThatDoNotExistFromBase();
-
+        m_loadingDb = false;
+        setMainStatus( "Loading database... done." );
         m_initialDbFilesUpdated = true;
 
         m_culInterface->getLogger()->log( "removeDeletedFilesFromDB::STOP" );
 
         m_genericWorker.addTask( [this] (){
+            setMainStatus( "Searching files..." );
             searchAllFiles();
         } );
     } );
@@ -486,12 +504,24 @@ void App::searchBackground()
 
     m_saveWorker.setRemoveTasksWhenConsumed( false );
     m_saveWorker.setThreadName( "m_saveWorker" );
-    m_saveWorker.SleepMS = 16000;
+    m_saveWorker.SleepMS = 4000;
     m_saveWorker.run();
     m_saveWorker.addTask( [this] (){
-        m_culInterface->getLogger()->log( "saveDuplicatesToFile::START" );
-        saveDuplicatesToFile();
-        m_culInterface->getLogger()->log( "saveDuplicatesToFile::STOP" );
+
+        if( m_loadingDb )
+        {
+            auto perc = m_fileDb.getPercentage();
+            {
+                std::lock_guard<std::mutex> lock( m_statusMutex );
+                m_statusText = "Loading database... " + CUL::String( static_cast<int>( perc ) ) + CUL::String( "%%" );
+            }
+        }
+        else
+        {
+            m_culInterface->getLogger()->log( "saveDuplicatesToFile::START" );
+            saveDuplicatesToFile();
+            m_culInterface->getLogger()->log( "saveDuplicatesToFile::STOP" );
+        }
     } );
 
     startWorkers();
@@ -538,6 +568,12 @@ void App::searchBackground()
     }
 }
 
+void App::setMainStatus( const CUL::String& status )
+{
+    std::lock_guard<std::mutex> lock( m_statusMutex );
+    m_statusText = status;
+}
+
 void App::searchAllFiles()
 {
     auto culFF = m_culInterface->getFS();
@@ -576,9 +612,11 @@ void App::saveDuplicatesToFile()
         duplicatesCopy = m_duplicates;
     }
 
-    for( const auto& [fileSize, fileGroup] : duplicatesCopy )
+    for( const auto& [fileSizeAsBytes, fileGroup] : duplicatesCopy )
     {
-        text = CUL::String( "Size: " ) + CUL::String( fileSize );
+        float MegaBytes = 1.f * fileSizeAsBytes / (1.f * bytesINMegabyte );
+
+        text = CUL::String( "Size: " ) + CUL::String( MegaBytes ) + CUL::String("MB");
 
         file->addLine( text );
 
@@ -684,10 +722,10 @@ void App::addFile( const CUL::String& path, size_t workerId )
     setWorkerStatus( "[Get DB info]" + path, workerId );
     auto info = m_fileDb.getFileInfo( path );
     CUL::String modTimeFromDb;
-    if( info )
+    if( info.MD5.empty() )
     {
         setWorkerStatus( "[Get DB info done]" + path, workerId );
-        modTimeFromDb = info->ModTime;
+        modTimeFromDb = info.ModTime;
     }
 
     const auto modTimeFromFS = modTime.toString();
@@ -721,13 +759,13 @@ void App::addFile( const CUL::String& path, size_t workerId )
     else
     {
         m_culInterface->getLogger()->log( CUL::String( "Path: " ) + path + " found on cache." );
-        md5 = info->MD5;
-        sizeBytes = info->Size;
+        md5 = info.MD5;
+        sizeBytes = info.Size;
     }
 
     auto sizeBytesAsInt = sizeBytes.toInt64();
 
-    if( sizeBytesAsInt < m_minFileSize )
+    if( sizeBytesAsInt < m_minFileSizeBytes )
     {
         setWorkerStatus( "[File to small, aborting.]" + path, workerId );
         return;
@@ -747,7 +785,6 @@ void App::addFile( const CUL::String& path, size_t workerId )
         fg.fileSize = sizeBytes.toUInt();
         fg.MD5Group[md5] = md5group;
         m_files[fg.fileSize] = fg;
-        m_culInterface->getLogger()->log( CUL::String( "Added: " ) + path );
     }
     else
     {
@@ -762,7 +799,6 @@ void App::addFile( const CUL::String& path, size_t workerId )
                 MD5Group newMd5Group;
                 newMd5Group.md5 = md5;
                 newMd5Group.files.push_back( path );
-                m_culInterface->getLogger()->log( CUL::String( "Added: " ) + path );
                 md5Group[md5] = newMd5Group;
                 groupPtr = &md5Group[md5];
             }
@@ -775,7 +811,6 @@ void App::addFile( const CUL::String& path, size_t workerId )
                 if( fileIt == filesSameSizeMd5.end() )
                 {
                     filesSameSizeMd5.push_back( path );
-                    m_culInterface->getLogger()->log( CUL::String( "Added: " ) + path );
                 }
                 groupPtr = &md5It->second;
 
@@ -830,9 +865,9 @@ CUL::String App::getModTimeFromDb( const CUL::String& filePath )
 {
     auto info = m_fileDb.getFileInfo( filePath );
 
-    if( info )
+    if( !info.MD5.empty() )
     {
-        return info->FilePath.getLastModificationTime().toString();
+        return info.FilePath.getLastModificationTime().toString();
     }
 
     return "";

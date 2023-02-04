@@ -104,6 +104,7 @@ private:
     void saveDuplicatesToFile();
     void setWorkerStatus( const CUL::String& status, size_t workerId );
     void searchAllFiles();
+    void setMainStatus( const CUL::String& status );
     std::mutex m_workerStatusMtx;
 
     CUL::String m_outputFile;
@@ -185,8 +186,14 @@ private:
     std::mutex m_filesMtx;
     std::map<FileSize, FileGroup> m_files;
 
-    int m_minFileSize = 2000;
+    int m_minFileSizeBytes = 1024 * 1024 * 2;
 
     bool m_initialDbFilesUpdated = false;
     CUL::FS::FileDatabase m_fileDb;
+    static constexpr int64_t bytesINMegabyte = 1024 * 1024;
+
+
+    std::mutex m_statusMutex;
+    CUL::String m_statusText;
+    std::atomic_bool m_loadingDb = false;
 };
