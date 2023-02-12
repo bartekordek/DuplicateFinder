@@ -29,7 +29,8 @@ App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const 
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
     m_outputFile = "D:\\out.txt";
-    m_maxThreadCount = 12;
+    m_maxThreadCount = 14;
+    m_minFileSizeBytes = 1024 * 2;
 }
 
 void App::onInit()
@@ -510,17 +511,17 @@ void App::searchBackground()
 
         if( m_loadingDb )
         {
-            auto perc = m_fileDb.getPercentage();
-            {
-                std::lock_guard<std::mutex> lock( m_statusMutex );
-                m_statusText = "Loading database... " + CUL::String( static_cast<int>( perc ) ) + CUL::String( "%%" );
-            }
         }
         else
         {
             m_culInterface->getLogger()->log( "saveDuplicatesToFile::START" );
             saveDuplicatesToFile();
             m_culInterface->getLogger()->log( "saveDuplicatesToFile::STOP" );
+        }
+
+        {
+            std::lock_guard<std::mutex> lock( m_statusMutex );
+            m_statusText = m_fileDb.getDbState();
         }
     } );
 
@@ -746,12 +747,20 @@ void App::addFile( const CUL::String& path, size_t workerId )
         }
     } );
 
+
     if( modTimeFromFS != modTimeFromDb )
     {
+        sizeBytes = file->getSizeBytes().toInt64();
+        if( sizeBytes < m_minFileSizeBytes )
+        {
+            setWorkerStatus( "[File to small, aborting.]" + path, workerId );
+            return;
+        }
+
         setWorkerStatus( "[File changed, calcualte md5...]" + path, workerId );
         md5 = file->getMD5();
         setWorkerStatus( "[File changed, calcualte md5 done.]" + path, workerId );
-        sizeBytes = file->getSizeBytes();
+        
         setWorkerStatus( "[File adding to db...]" + path, workerId );
         m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTime.toString() );
         setWorkerStatus( "[File adding to db... done.]" + path, workerId );

@@ -186,7 +186,7 @@ private:
     std::mutex m_filesMtx;
     std::map<FileSize, FileGroup> m_files;
 
-    int m_minFileSizeBytes = 1024 * 1024 * 2;
+    int m_minFileSizeBytes = 256;
 
     bool m_initialDbFilesUpdated = false;
     CUL::FS::FileDatabase m_fileDb;
