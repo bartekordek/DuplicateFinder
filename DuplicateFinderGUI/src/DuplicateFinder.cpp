@@ -710,154 +710,42 @@ void App::addFile( const CUL::String& path, size_t workerId )
 {
     setWorkerStatus( "[START]" + path, workerId );
 
-    CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer( m_logger );
-    m_frameTimer->start();
-
     std::unique_ptr<CUL::FS::IFile> file;
-
-    setWorkerStatus( "[Load file]" + path, workerId );
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
-
-    setWorkerStatus( "[Get last mod time]" + path, workerId );
-    auto modTime = file->getLastModificationTime();
-    setWorkerStatus( "[Get DB info]" + path, workerId );
-    auto info = m_fileDb.getFileInfo( path );
-    CUL::String modTimeFromDb;
-    if( info.MD5.empty() )
-    {
-        setWorkerStatus( "[Get DB info done]" + path, workerId );
-        modTimeFromDb = info.ModTime;
-    }
-
-    const auto modTimeFromFS = modTime.toString();
-
-    CUL::String md5;
-    CUL::String sizeBytes;
-
-    CUL::GUTILS::ScopeExit se( [&m_frameTimer,this] (){
-        m_frameTimer->stop();
-        const auto& elapsed = m_frameTimer->getElapsed();
-        const unsigned elapsedUi = elapsed.getMs();
-        m_fileAddTasksDuration.push_back( elapsedUi );
-        delete m_frameTimer;
-
-        if( m_fileAddTasksDuration.size() > m_maxTasksDurationSamples )
-        {
-            m_fileAddTasksDuration.pop_front();
-        }
-    } );
-
-
-    if( modTimeFromFS != modTimeFromDb )
-    {
-        sizeBytes = file->getSizeBytes().toInt64();
-        if( sizeBytes < m_minFileSizeBytes )
-        {
-            setWorkerStatus( "[File to small, aborting.]" + path, workerId );
-            return;
-        }
-
-        setWorkerStatus( "[File changed, calcualte md5...]" + path, workerId );
-        md5 = file->getMD5();
-        setWorkerStatus( "[File changed, calcualte md5 done.]" + path, workerId );
-        
-        setWorkerStatus( "[File adding to db...]" + path, workerId );
-        m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTime.toString() );
-        setWorkerStatus( "[File adding to db... done.]" + path, workerId );
-    }
-    else
-    {
-        m_culInterface->getLogger()->log( CUL::String( "Path: " ) + path + " found on cache." );
-        md5 = info.MD5;
-        sizeBytes = info.Size;
-    }
-
-    auto sizeBytesAsInt = sizeBytes.toInt64();
-
-    if( sizeBytesAsInt < m_minFileSizeBytes )
+    const auto sizeBytes = file->getSizeBytes().toInt64();
+    if( sizeBytes < m_minFileSizeBytes )
     {
         setWorkerStatus( "[File to small, aborting.]" + path, workerId );
         return;
     }
-    std::lock_guard<std::mutex> lockMap( m_filesMtx );
 
-    bool foundDuplicates = false;
-
-    auto groupIt = m_files.find( sizeBytesAsInt );
-    if( groupIt == m_files.end() )
+    setWorkerStatus( "[Get last mod time]" + path, workerId );
+    const auto modTimeFromFS = file->getLastModificationTime().toString();
+    setWorkerStatus( "[Get DB info]" + path, workerId );
+    auto info = m_fileDb.getFileInfo( path );
+    CUL::String modTimeFromDb;
+    if( info.Found )
     {
-        MD5Group md5group;
-        md5group.md5 = md5;
-        md5group.files.push_back( path );
-
-        FileGroup fg;
-        fg.fileSize = sizeBytes.toUInt();
-        fg.MD5Group[md5] = md5group;
-        m_files[fg.fileSize] = fg;
+        modTimeFromDb = info.ModTime;
     }
     else
     {
-        MD5Group* groupPtr = nullptr;
-        {
-            auto& md5Group = groupIt->second.MD5Group;
+        setWorkerStatus( "[Get DB info done]" + path, workerId );
+    }
 
-            auto md5It = md5Group.find( md5 );
+    if( modTimeFromFS == modTimeFromDb )
+    {
+        return;
+    }
+    else
+    {
+        setWorkerStatus( "[File changed, calcualte md5...]" + path, workerId );
+        auto md5 = file->getMD5();
+        setWorkerStatus( "[File changed, calcualte md5 done.]" + path, workerId );
 
-            if( md5It == md5Group.end() )
-            {
-                MD5Group newMd5Group;
-                newMd5Group.md5 = md5;
-                newMd5Group.files.push_back( path );
-                md5Group[md5] = newMd5Group;
-                groupPtr = &md5Group[md5];
-            }
-            else
-            {
-                auto& filesSameSizeMd5 = md5It->second.files;
-                auto fileIt = std::find_if( filesSameSizeMd5.begin(), filesSameSizeMd5.end(), [&path] ( const CUL::FS::Path& curr ){
-                    return curr == path;
-                } );
-                if( fileIt == filesSameSizeMd5.end() )
-                {
-                    filesSameSizeMd5.push_back( path );
-                }
-                groupPtr = &md5It->second;
-
-                if( filesSameSizeMd5.size() > 1 )
-                {
-                    foundDuplicates = true;
-                }
-            }
-        }
-
-        if( foundDuplicates )
-        {
-            std::lock_guard<std::mutex> lock( m_duplicatesMtx );
-            auto sizeBytesAsInt = sizeBytes.toInt64();
-            auto duplicatesSizeGroupIt = m_duplicates.find( sizeBytesAsInt );
-            if( duplicatesSizeGroupIt == m_duplicates.end() )
-            {
-                FileGroup fg;
-                fg.fileSize = sizeBytesAsInt;
-                fg.MD5Group[md5] = *groupPtr;
-
-                m_duplicates[sizeBytesAsInt] = fg;
-            }
-            else
-            {
-                FileGroup& fg = duplicatesSizeGroupIt->second;
-                auto duplicatesMd5GroupIt = fg.MD5Group.find( md5 );
-                if( duplicatesMd5GroupIt == fg.MD5Group.end() )
-                {
-                    fg.MD5Group[md5] = *groupPtr;
-                }
-                else
-                {
-                    MD5Group& md5Group = duplicatesMd5GroupIt->second;
-                    md5Group = *groupPtr;
-                }
-            }
-        }
+        setWorkerStatus( "[File adding to db...]" + path, workerId );
+        m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS );
+        setWorkerStatus( "[File adding to db... done.]" + path, workerId );
     }
     setWorkerStatus( "[Done.]" + path, workerId );
 }
@@ -904,17 +792,6 @@ void App::getList()
 
 void App::printCurrentMean()
 {
-    float sum = 0.f;
-    std::lock_guard<std::mutex> lock( m_fileAddTasksDurationMtx );
-    size_t vSize = m_fileAddTasksDuration.size();
-    for( size_t i = 0; i < vSize; ++i )
-    {
-        sum += m_fileAddTasksDuration[i];
-    }
-
-    float mean = sum / vSize;
-
-    m_culInterface->getLogger()->log( CUL::String( "Mean: " ) + CUL::String( mean ) );
 }
 
 App::~App()

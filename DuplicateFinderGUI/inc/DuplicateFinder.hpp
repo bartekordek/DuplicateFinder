@@ -159,10 +159,6 @@ private:
 
     CUL::String m_empty;
 
-    std::mutex m_fileAddTasksDurationMtx;
-    size_t m_maxTasksDurationSamples = 256;
-    std::deque<unsigned> m_fileAddTasksDuration;
-
     std::vector<CUL::String> m_deletionList;
 
 
@@ -182,9 +178,6 @@ private:
 
     std::mutex m_foundFileMtx;
     CUL::String m_foundFile;
-
-    std::mutex m_filesMtx;
-    std::map<FileSize, FileGroup> m_files;
 
     int m_minFileSizeBytes = 256;
 
