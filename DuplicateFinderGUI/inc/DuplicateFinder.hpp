@@ -189,4 +189,6 @@ private:
     std::mutex m_statusMutex;
     CUL::String m_statusText;
     std::atomic_bool m_loadingDb = false;
+
+    size_t m_maxTasksInQueue = 64;
 };

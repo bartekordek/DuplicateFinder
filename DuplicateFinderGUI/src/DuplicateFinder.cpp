@@ -29,8 +29,9 @@ App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const 
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
     m_outputFile = "D:\\out.txt";
-    m_maxThreadCount = 14;
+    m_maxThreadCount = 10;
     m_minFileSizeBytes = 1024 * 2;
+    m_maxTasksInQueue = 32;
 }
 
 void App::onInit()
@@ -260,50 +261,6 @@ void App::guiIteration()
 
             ImGui::TextUnformatted( someString.c_str() );
         }
-    }
-
-
-    for( const auto& [fileSizeAsBytes, flieGroup] : m_duplicates )
-    {
-        const size_t md5Count = flieGroup.MD5Group.size();
-
-
-        float MegaBytes = 1.f * fileSizeAsBytes / ( 1.f * bytesINMegabyte );
-
-        const CUL::String m_fileSizeString = "Size: " + CUL::String( MegaBytes ) + "MB, MD5 count: " + CUL::String( (int)md5Count );
-
-        bool show = false;
-        for( const auto& [md5value, paths] : flieGroup.MD5Group )
-        {
-            if( paths.files.size() > 1 )
-            {
-                show = true;
-            }
-        }
-
-        if( show && ImGui::TreeNode( m_fileSizeString.cStr() ) )
-        {
-            for( const auto& [md5value, md5Group] : flieGroup.MD5Group )
-            {
-                const size_t filesCount = md5Group.files.size();
-                if( filesCount > 1 )
-                {
-                    const CUL::String m_md5valueString = "MD5: " + md5value + ", files count: " + CUL::String( (int) filesCount );
-                    if( ImGui::TreeNode( m_md5valueString.cStr() ) )
-                    {
-                        for( const auto& fsPath : md5Group.files )
-                        {
-                            ImGui::InputText( "default", (char*)fsPath.getPath().cStr(), 64 );
-                            //ImGui::BulletText( fsPath.getPath().cStr() );
-                        }
-                        ImGui::TreePop();
-                    }
-                }
-                
-            }
-            ImGui::TreePop();
-        }
-        //
     }
 
     ImGui::End();
@@ -675,6 +632,11 @@ void App::workerThreadMethod()
 
 void App::addTask( std::function<void(size_t)> task )
 {
+    while( getTasksLeft() > m_maxTasksInQueue )
+    {
+        CUL::ITimer::sleepMiliSeconds( 64 );
+    }
+
     std::lock_guard<std::mutex> functionLock( m_tasksMtx );
     m_tasks.push_back( task );
 }
@@ -710,9 +672,15 @@ void App::addFile( const CUL::String& path, size_t workerId )
 {
     setWorkerStatus( "[START]" + path, workerId );
 
+    if( path.contains("D:/GuglDrajwu/Pics/IMG_20210709_211926.jpg") || path.contains("D:/GuglDrajwu/Pics/IMG_20200822_112755.jpg") || path.contains("D:/GuglDrajwu/Pics/IMG_20200822_112859.jpg") )
+    {
+        auto x = 0;
+    }
+
     std::unique_ptr<CUL::FS::IFile> file;
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
-    const auto sizeBytes = file->getSizeBytes().toInt64();
+    CUL::String fileSize = file->getSizeBytes();
+    const auto sizeBytes = fileSize.toInt64();
     if( sizeBytes < m_minFileSizeBytes )
     {
         setWorkerStatus( "[File to small, aborting.]" + path, workerId );
@@ -724,9 +692,11 @@ void App::addFile( const CUL::String& path, size_t workerId )
     setWorkerStatus( "[Get DB info]" + path, workerId );
     auto info = m_fileDb.getFileInfo( path );
     CUL::String modTimeFromDb;
+    CUL::String md5;
     if( info.Found )
     {
         modTimeFromDb = info.ModTime;
+        md5 = info.MD5;
     }
     else
     {
@@ -735,19 +705,68 @@ void App::addFile( const CUL::String& path, size_t workerId )
 
     if( modTimeFromFS == modTimeFromDb )
     {
-        return;
+        
     }
     else
     {
         setWorkerStatus( "[File changed, calcualte md5...]" + path, workerId );
-        auto md5 = file->getMD5();
+        md5 = file->getMD5();
         setWorkerStatus( "[File changed, calcualte md5 done.]" + path, workerId );
 
         setWorkerStatus( "[File adding to db...]" + path, workerId );
         m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS );
         setWorkerStatus( "[File adding to db... done.]" + path, workerId );
     }
-    setWorkerStatus( "[Done.]" + path, workerId );
+
+    auto duplicates = m_fileDb.getFilesMatching( fileSize, md5 );
+    if( duplicates.size() > 1 )
+    {
+        std::lock_guard<std::mutex> lock( m_duplicatesMtx );
+
+        auto it = m_duplicates.find( sizeBytes );
+        if( it == m_duplicates.end() )
+        {
+            MD5Group md5g;
+            md5g.md5 = md5;
+            for( const auto& file: duplicates )
+            {
+                md5g.files.push_back( file );
+            }
+
+            FileGroup fg;
+            fg.fileSize = sizeBytes;
+            fg.MD5Group[md5] = md5g;
+
+            m_duplicates[sizeBytes] = fg;
+        }
+        else
+        {
+            FileGroup& fg = it->second;
+            auto md5it = fg.MD5Group.find( md5 );
+            if( md5it == fg.MD5Group.end() )
+            {
+                MD5Group md5g;
+                md5g.md5 = md5;
+                for( const auto& file : duplicates )
+                {
+                    md5g.files.push_back( file );
+                }
+                fg.MD5Group[md5] = md5g;
+            }
+            else
+            {
+                MD5Group& md5Group = md5it->second;
+                md5Group.files.clear();
+
+                for( const auto& file : duplicates )
+                {
+                    md5Group.files.push_back( file );
+                }
+            }
+        }
+    }
+
+    setWorkerStatus( "[Idle]", workerId );
 }
 
 void App::addFileToList( const CUL::String path )
