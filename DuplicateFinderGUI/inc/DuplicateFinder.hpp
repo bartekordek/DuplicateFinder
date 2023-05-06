@@ -21,7 +21,6 @@ namespace SDL2W
     class IKey;
 }
 
-
 NAMESPACE_BEGIN( LOGLW )
 class Camera;
 class Cube;
@@ -102,6 +101,7 @@ private:
 
     void startWorkers();
     void saveDuplicatesToFile();
+    std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList );
     void setWorkerStatus( const CUL::String& status, size_t workerId );
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
@@ -185,10 +185,13 @@ private:
     CUL::FS::FileDatabase m_fileDb;
     static constexpr int64_t bytesINMegabyte = 1024 * 1024;
 
-
     std::mutex m_statusMutex;
     CUL::String m_statusText;
     std::atomic_bool m_loadingDb = false;
 
     size_t m_maxTasksInQueue = 64;
+
+    std::atomic<int> m_filesTotalCount = 0;
+    std::atomic<int> m_readFilesCount = 0;
+    std::atomic<float> m_percentage = 0.f;
 };

@@ -1,2 +1,2 @@
 PNG_LOADER DevIL
-OPENGL_FORCE_LEGACY false
+RENDERER opengl_modern
