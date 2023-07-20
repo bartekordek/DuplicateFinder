@@ -75,8 +75,8 @@ private:
     void onWindowEvent( const SDL2W::WindowEvent::Type e ) override;
     void timerThread();
     void onKeyBoardEvent( const SDL2W::KeyboardState& key ) override;
-    void customFrame();
-    void onMouseEvent( const SDL2W::MouseData& mouseData );
+    void customFrame() override;
+    void onMouseEvent( const SDL2W::MouseData& mouseData ) override;
     void updateEuler( float yaw, float pitch );
     void guiIteration();
     void searchOneTime();

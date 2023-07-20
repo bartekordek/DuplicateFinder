@@ -30,7 +30,7 @@ App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const 
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
     m_outputFile = "D:\\out.txt";
-    m_maxThreadCount = 10;
+    m_maxThreadCount = 12;
     m_minFileSizeBytes = 32;
     m_maxTasksInQueue = 32;
 }
@@ -117,7 +117,7 @@ void App::guiIteration()
 {
     CUL::String name = "MAIN";
     ImGui::Begin( name.cStr(), nullptr,
-                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar );
+                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImG{}uiWindowFlags_No{}TitleBar );
 
     auto winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
 
