@@ -77,7 +77,6 @@ private:
     void onKeyBoardEvent( const SDL2W::KeyboardState& key ) override;
     void customFrame() override;
     void onMouseEvent( const SDL2W::MouseData& mouseData ) override;
-    void updateEuler( float yaw, float pitch );
     void guiIteration();
     void searchOneTime();
     void searchBackground();
@@ -86,10 +85,7 @@ private:
     void addFile( const CUL::String& path, size_t workerId );
     void addFileToList( const CUL::String path );
 
-    void addTask( std::function<void( size_t )> task );
-    std::function<void(size_t)> getTask();
-    void workerThreadMethod();
-    unsigned getTasksLeft();
+    void addTask( std::function<void( int8_t )> task );
     CUL::String getModTimeFromDb( const CUL::String& filePath );
     void printCurrentMean();
 
@@ -102,10 +98,8 @@ private:
     void startWorkers();
     void saveDuplicatesToFile();
     std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList );
-    void setWorkerStatus( const CUL::String& status, size_t workerId );
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
-    std::mutex m_workerStatusMtx;
 
     CUL::String m_outputFile;
     std::vector<CUL::String> m_searchPaths;
@@ -139,18 +133,11 @@ private:
 
     CUL::CULInterface* m_culInterface = nullptr;
     size_t m_maxThreadCount = 7;
-    std::vector<CUL::String> m_currentFiles;
 
     std::mutex m_duplicatesMtx;
     std::map<FileSize, FileGroup> m_duplicates;
 
     std::atomic_bool m_workersEnabled = false;
-
-    std::mutex m_workersMtx;
-    std::map<std::thread::id, std::thread> m_workers;
-
-    std::mutex m_tasksMtx;
-    std::vector<std::function<void(size_t)>> m_tasks;
 
     std::atomic<float> m_filesCount = 0.f;
     std::atomic<float> m_filesDone = 0.f;
@@ -171,11 +158,6 @@ private:
 
     bool m_searchStarted = false;
 
-    CUL::Worker m_updateDeletedFiles;
-    CUL::Worker m_saveWorker;
-
-    CUL::Worker m_genericWorker;
-
     std::mutex m_foundFileMtx;
     CUL::String m_foundFile;
 
@@ -194,4 +176,8 @@ private:
     std::atomic<int> m_filesTotalCount = 0;
     std::atomic<int> m_readFilesCount = 0;
     std::atomic<float> m_percentage = 0.f;
+
+    bool m_continousSearch = true;
+    bool m_run = true;
+    std::thread m_workersCountThread;
 };

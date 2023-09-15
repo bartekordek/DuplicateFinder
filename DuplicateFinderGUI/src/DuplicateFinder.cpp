@@ -14,23 +14,40 @@
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/GenericUtils/ConsoleUtilities.hpp"
 #include "CUL/GenericUtils/ScopeExit.hpp"
-#include "CUL/Threading/ThreadUtils.hpp"
+#include "CUL/Threading/ThreadUtil.hpp"
 #include "CUL/GenericUtils/ScopeExit.hpp"
+#include "CUL/Threading/MultiWorkerSystem.hpp"
+#include "CUL/Threading/TaskCallback.hpp"
 
 #include "CUL/STL_IMPORTS/STD_future.hpp"
 #include "CUL/STL_IMPORTS/STD_codecvt.hpp"
+#include "CUL/STL_IMPORTS/STD_future.hpp"
 
 #define NFD_NATIVE
 #include "nfd.h"
 
+#if 1 // DEBUG_THIS_FILE
+    #define DEBUG_THIS_FILE 1
+    #ifdef _MSC_VER
+        #pragma optimize( "", off )
+    #else
+        #pragma clang optimize off
+    #endif
+#endif
+
 
 App* App::s_instance = nullptr;
+
+const CUL::String WorkerStatus(int8_t workerId, const CUL::String& status)
+{
+    return "[" + CUL::String( workerId ) + "] " + status;
+}
 
 App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
     m_outputFile = "D:\\out.txt";
-    m_maxThreadCount = 12;
+    m_maxThreadCount = 3;
     m_minFileSizeBytes = 32;
     m_maxTasksInQueue = 32;
 }
@@ -38,6 +55,12 @@ App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const 
 void App::onInit()
 {
     s_instance = this;
+    m_continousSearch = false;
+
+    m_searchPaths.push_back( CUL::String( "D:\\" ) );
+    m_searchPaths.push_back( CUL::String( "E:\\" ) );
+    m_searchPaths.push_back( CUL::String( "F:\\" ) );
+    m_searchPaths.push_back( CUL::String( "P:\\" ) );
 
     m_culInterface = m_oglw->getCul();
 
@@ -58,7 +81,6 @@ void App::onInit()
         timerThread();
     } );
 
-    m_currentFiles.resize( m_maxThreadCount );
     m_thread.run();
 }
 
@@ -104,7 +126,6 @@ void App::timerThread()
 
 void App::customFrame()
 {
-
 }
 
 std::string wstring_to_utf8( const std::wstring& str )
@@ -117,7 +138,7 @@ void App::guiIteration()
 {
     CUL::String name = "MAIN";
     ImGui::Begin( name.cStr(), nullptr,
-                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImG{}uiWindowFlags_No{}TitleBar );
+                  ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar );
 
     auto winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
 
@@ -159,6 +180,34 @@ void App::guiIteration()
 
     ImGui::Text( m_outputFile.cStr() );
 
+    if( ImGui::Button( "Add worker" ) )
+    {
+        ++m_maxThreadCount;
+
+        if( m_workersCountThread.joinable() )
+        {
+            m_workersCountThread.join();
+        }
+
+        m_workersCountThread = std::thread( [this]() {
+            CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
+        } );
+    }
+
+    if( ImGui::Button( "Remove worker" ) )
+    {
+        --m_maxThreadCount;
+
+        if( m_workersCountThread.joinable() )
+        {
+            m_workersCountThread.join();
+        }
+
+        m_workersCountThread = std::thread( [this]() {
+            CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
+        } );
+    }
+
     {
         std::string textCopy;
         {
@@ -196,7 +245,7 @@ void App::guiIteration()
     if( ImGui::BeginTable( "split", 3, flags ) )
     {
         ImGui::TableSetupColumn( "", ImGuiTableColumnFlags_WidthStretch, 16.f );
-        static float width = 270.f;
+        constexpr float width = 270.f;
         ImGui::TableSetupColumn( "Done:", ImGuiTableColumnFlags_WidthStretch, width );
         ImGui::TableSetupColumn( "Current:", ImGuiTableColumnFlags_WidthStretch, width );
 
@@ -250,15 +299,11 @@ void App::guiIteration()
 
     if( m_searchStarted )
     {
-        for( size_t i = 0; i < m_maxThreadCount; ++i )
-        {
-            CUL::String currentFileText;
-            {
-                std::lock_guard<std::mutex> lock( m_workerStatusMtx );
-                currentFileText = m_currentFiles[i];
-            }
+        const auto statuses = CUL::MultiWorkerSystem::getInstance().getWorkersStatuses();
 
-            const auto someString = wstring_to_utf8( currentFileText.getString() );
+        for( const auto& status : statuses )
+        {
+            const auto someString = wstring_to_utf8( status.getString() );
 
             ImGui::TextUnformatted( someString.c_str() );
         }
@@ -319,71 +364,11 @@ void App::chooseResultFile()
 
     NFD_Quit();
 
-
     m_logger->log( "found?" );
 }
 
-void App::onMouseEvent( const SDL2W::MouseData& mouseData )
+void App::onMouseEvent( const SDL2W::MouseData& )
 {
-    static auto windowSize = m_oglw->getMainWindow()->getSize();
-    if( true && mouseData.isButtonDown( 1 ) )
-    {
-        const auto& md = m_oglw->getMouseData();
-        auto mouseX = md.getX() - windowSize.getWidth() / 2;
-        auto mouseY = md.getY() - windowSize.getHeight() / 2;
-
-        if( m_firstMouse )
-        {
-            m_mouseLastX = mouseX;
-            m_mouseLastY = mouseY;
-            m_firstMouse = false;
-        }
-
-        int xoffset = mouseX - m_mouseLastX;
-        int yoffset = m_mouseLastY - mouseY;  // reversed since y-coordinates go from bottom to top
-
-        static float sensitivity = 0.002f;
-        float newX = xoffset * sensitivity;
-        float newY = yoffset * sensitivity;
-
-        updateEuler( m_yawLast += newX, m_pitchLast += newY );
-
-        m_mouseLastX = mouseX;
-        m_mouseLastY = mouseY;
-
-        m_front = glm::normalize( m_oglw->getCamera().getCenter() );
-        m_right = glm::normalize( glm::cross( m_front, m_oglw->getCamera().getUp() ) );
-    }
-}
-
-void App::updateEuler( float yaw, float pitch )
-{
-    auto eye = m_oglw->getCamera().getEye();
-
-    CUL::String logVal = "YAW: " + CUL::String( yaw ) + CUL::String( ", PITCH: " ) + CUL::String( pitch );
-    m_logger->log( logVal );
-
-    m_lookAngles.Yaw.setValue( yaw, CUL::MATH::Angle::Type::RADIAN );
-    m_lookAngles.Pitch.setValue( pitch, CUL::MATH::Angle::Type::RADIAN );
-
-    glm::vec3 NewCenter = moveOnSphere( m_lookAngles.Yaw.getRad(), m_lookAngles.Pitch.getRad(), 0.f, 100.f );
-    NewCenter += eye;
-    m_oglw->getCamera().setCenter( NewCenter );
-
-
-    m_yawLast = yaw;
-    m_pitchLast = pitch;
-}
-
-glm::vec3 App::moveOnSphere( float yaw, float pitch, float /*row*/, float rad )
-{
-    glm::vec3 result;
-
-    result.x = rad * std::cos( yaw ) * std::cos( pitch );
-    result.y = rad * std::sin( pitch );
-    result.z = rad * std::sin( yaw ) * std::cos( pitch );
-
-    return result;
 }
 
 void App::searchOneTime()
@@ -403,10 +388,10 @@ void App::searchOneTime()
                 m_foundFile = path.getPath();
             }
             m_filesCount = m_filesCount + 1.f;
-            addTask( [this, path] ( size_t workerId ){
-                m_currentFiles[workerId] = path.getPath();
+            addTask( [this, path] ( size_t workerId){
+                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, path.getPath() ) );
                 addFile( path.getPath().string(), workerId );
-                m_currentFiles[workerId] = "";
+                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
 
                 m_filesDone = m_filesDone + 1.f;
             } );
@@ -415,81 +400,83 @@ void App::searchOneTime()
 
     m_workersEnabled = false;
 
-    for( auto& thread : m_workers )
-    {
-        if( thread.second.joinable() )
-        {
-            thread.second.join();
-        }
-    }
-
     m_searchStarted = false;
 
     m_culInterface->getLogger()->log( "\nDONE.");
 }
 
-void App::setWorkerStatus( const CUL::String& status, size_t workerId )
-{
-    std::lock_guard<std::mutex> lock( m_workerStatusMtx );
-    m_currentFiles[workerId] = status;
-}
-
 void App::searchBackground()
 {
     auto culFF = m_culInterface->getFS();
-    m_updateDeletedFiles.addTask( [this] (){
-        m_culInterface->getLogger()->log( "removeDeletedFilesFromDB::START" );
 
-        setMainStatus( "Loading database..." );
+    CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
+    loadDbTask->Callback = [this]( int8_t workerId ) {
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "loading data from db..." ) );
         m_loadingDb = true;
         m_fileDb.loadFilesFromDatabase();
         m_loadingDb = false;
-        setMainStatus( "Loading database... done." );
         m_initialDbFilesUpdated = true;
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
+    };
+    loadDbTask->Type = CUL::ITask::EType::DeleteAfterExecute;
+    CUL::MultiWorkerSystem::getInstance().startTask( loadDbTask );
 
-        m_culInterface->getLogger()->log( "removeDeletedFilesFromDB::STOP" );
-
-        m_genericWorker.addTask( [this] (){
-            setMainStatus( "Searching files..." );
-            searchAllFiles();
-        } );
-    } );
-
-    m_updateDeletedFiles.setRemoveTasksWhenConsumed( true );
-    m_updateDeletedFiles.setThreadName( "m_updateDeletedFiles" );
-    m_updateDeletedFiles.SleepMS = 1000;
-    m_updateDeletedFiles.run();
-    m_runBackground = true;
-
-    m_saveWorker.setRemoveTasksWhenConsumed( false );
-    m_saveWorker.setThreadName( "m_saveWorker" );
-    m_saveWorker.SleepMS = 4000;
-    m_saveWorker.run();
-    m_saveWorker.addTask( [this] (){
-
-        if( m_loadingDb )
+    CUL::TaskCallback* searchTask = new CUL::TaskCallback();
+    searchTask->Type = CUL::ITask::EType::Loop;
+    searchTask->Callback = [this, searchTask]( int8_t workerId ) {
+        if( m_run == true )
         {
+            setMainStatus( "Searching files..." );
+            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Searching files..." ) );
+            searchAllFiles();
+            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
         }
         else
+        {
+            searchTask->Type = CUL::ITask::EType::DeleteAfterExecute;
+        }
+    };
+    CUL::MultiWorkerSystem::getInstance().startTask( searchTask );
+
+    CUL::TaskCallback* saveTask = new CUL::TaskCallback();
+    saveTask->Type = CUL::ITask::EType::Loop;
+    saveTask->Callback = [this, saveTask]( int8_t workerId ) {
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Saving duplicates..." ) );
+        if( m_run == false )
+        {
+            saveTask->Type = CUL::ITask::EType::DeleteAfterExecute;
+        }
+
+        if( m_loadingDb == false )
         {
             m_culInterface->getLogger()->log( "saveDuplicatesToFile::START" );
             saveDuplicatesToFile();
             m_culInterface->getLogger()->log( "saveDuplicatesToFile::STOP" );
         }
+    };
+    CUL::MultiWorkerSystem::getInstance().startTask( saveTask );
 
+    CUL::TaskCallback* deleteDeletedFileFromBase = new CUL::TaskCallback();
+    deleteDeletedFileFromBase->Type = CUL::ITask::EType::Loop;
+    deleteDeletedFileFromBase->Callback = [this, saveTask]( int8_t workerId ) {
+        if( m_run == false )
         {
-            std::lock_guard<std::mutex> lock( m_statusMutex );
-            m_statusText = m_fileDb.getDbState();
+            saveTask->Type = CUL::ITask::EType::DeleteAfterExecute;
         }
-    } );
 
+        if( m_loadingDb == false )
+        {
+            m_culInterface->getLogger()->log( "deleteRemnants::START" );
+            m_fileDb.deleteRemnants();
+            m_culInterface->getLogger()->log( "deleteRemnants::STOP" );
+        }
+    };
+    CUL::MultiWorkerSystem::getInstance().startTask( deleteDeletedFileFromBase );
+
+   
     startWorkers();
     m_searchStarted = true;
 
-
-    m_genericWorker.setThreadName( "m_genericWorker" );
-    m_genericWorker.setRemoveTasksWhenConsumed( true );
-    m_genericWorker.run();
 
     while( m_runBackground )
     {
@@ -554,7 +541,8 @@ void App::searchAllFiles()
                 }
 
                 addTask( [this, path] ( size_t workerId ){
-                    CUL::String pathAsString = path.getPath();
+                    const CUL::String pathAsString = path.getPath();
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Searching files..." ) );
                     addFile( pathAsString, workerId );
                     ++m_readFilesCount;
                     m_percentage = 100.f * m_readFilesCount / ( 1.f * m_filesTotalCount );
@@ -567,6 +555,9 @@ void App::searchAllFiles()
 
 void App::saveDuplicatesToFile()
 {
+    const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
+    CUL::String status;
+
     auto file = m_culInterface->getFF()->createRegularFileRawPtr( CUL::FS::Path( m_outputFile ) );
 
     CUL::String text = CUL::String( "Files: " );
@@ -575,9 +566,17 @@ void App::saveDuplicatesToFile()
 
     {
         const auto listOfSizes = m_fileDb.getListOfSizes();
+        const size_t listOfSizesSize = listOfSizes.size();
+        constexpr size_t minSize = 1024 * 1024;
 
-        for( const auto size : listOfSizes )
+        for( size_t i = 0; i < listOfSizesSize; ++i )
         {
+            const auto size = listOfSizes[i];
+            if( size <= minSize )
+            {
+                continue;
+            }
+
             const auto sameSizeFiles = m_fileDb.getFiles( size );
             if( sameSizeFiles.size() > 1 )
             {
@@ -597,13 +596,15 @@ void App::saveDuplicatesToFile()
                         for( const auto fileInfo : duplicatesList )
                         {
                             file->addLine( fileInfo.FilePath );
+                            file->saveFile();
                         }
                     }
                 }
             }
+            status = CUL::String( "Saved duplicate: " ) + CUL::String( ( 100.f * i ) / ( 1.f * listOfSizesSize ) ) + "%";
+            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
         }
     }
-    file->saveFile();
 
     delete file;
 }
@@ -623,86 +624,30 @@ std::set<CUL::String> App::getListOfMd5s( const std::vector<CUL::FS::FileDatabas
 void App::startWorkers()
 {
     m_workersEnabled = true;
-    for( size_t i = 0; i < m_maxThreadCount; ++i )
-    {
-        std::thread fileThread( &App::workerThreadMethod, this );
-        std::thread::id threadId = fileThread.get_id();
-        m_workers[threadId] = std::move( fileThread );
-    }
+    CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
 }
 
-void App::workerThreadMethod()
+void App::addTask( std::function<void( int8_t )> task )
 {
-    ++m_workersActive;
-
-    const CUL::String threadName = "FILE WORKER " + CUL::String( (int)m_workerId );
-    m_oglw->getCul()->getThreadUtils().setCurrentThreadName( threadName );
-    const size_t currentWorkerId = m_workerId;
-    ++m_workerId;
-    
-    while( m_workersEnabled || getTasksLeft() > 0 )
-    {
-        std::function<void( size_t )> task = getTask();
-
-        if( task )
-        {
-            task( currentWorkerId );
-        }
-    }
-    --m_workersActive;
-}
-
-
-void App::addTask( std::function<void(size_t)> task )
-{
-    while( getTasksLeft() > m_maxTasksInQueue )
+    while( CUL::MultiWorkerSystem::getInstance().getTasksLeft() > m_maxTasksInQueue )
     {
         CUL::ITimer::sleepMiliSeconds( 64 );
     }
 
-    std::lock_guard<std::mutex> functionLock( m_tasksMtx );
-    m_tasks.push_back( task );
-}
+    CUL::TaskCallback* taskPtr = new CUL::TaskCallback();
+    taskPtr->Callback = task;
+    taskPtr->Type = CUL::ITask::EType::DeleteAfterExecute;
 
-std::function<void(size_t)> App::getTask()
-{
-    std::function<void( size_t )> task;
-    {
-        std::lock_guard<std::mutex> functionLock( m_tasksMtx );
-
-        if( !m_tasks.empty() )
-        {
-            task = *m_tasks.rbegin();
-            m_tasks.pop_back();
-        }
-    }
-
-    return task;
-}
-
-unsigned App::getTasksLeft()
-{
-    unsigned result = 0u;
-    {
-        std::lock_guard<std::mutex> functionLock( m_tasksMtx );
-        result = (unsigned) m_tasks.size();
-    }
-    
-    return result;
+    CUL::MultiWorkerSystem::getInstance().startTask( taskPtr );
 }
 
 void App::addFile( const CUL::String& path, size_t workerId )
 {
-    setWorkerStatus( "[START]" + path, workerId );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path ) );
 
     CUL::GUTILS::ScopeExit se( [this, workerId]() {
-        setWorkerStatus( "[Idle]", workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
     } );
-
-    if( path.contains("D:/GuglDrajwu/Pics/IMG_20210709_211926.jpg") || path.contains("D:/GuglDrajwu/Pics/IMG_20200822_112755.jpg") || path.contains("D:/GuglDrajwu/Pics/IMG_20200822_112859.jpg") )
-    {
-        auto x = 0;
-    }
 
     std::unique_ptr<CUL::FS::IFile> file;
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
@@ -710,13 +655,13 @@ void App::addFile( const CUL::String& path, size_t workerId )
     const auto sizeBytes = fileSize.toInt64();
     if( sizeBytes < m_minFileSizeBytes )
     {
-        setWorkerStatus( "[File too small, aborting.]" + path, workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File too small, aborting.]" ) );
         return;
     }
 
-    setWorkerStatus( "[Get last mod time]" + path, workerId );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path ) );
     const auto modTimeFromFS = file->getLastModificationTime().toString();
-    setWorkerStatus( "[Get DB info]" + path, workerId );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path ) );
     auto info = m_fileDb.getFileInfo( path );
     CUL::String modTimeFromDb;
     CUL::String md5;
@@ -727,7 +672,7 @@ void App::addFile( const CUL::String& path, size_t workerId )
     }
     else
     {
-        setWorkerStatus( "[Get DB info done]" + path, workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path ) );
     }
 
     if( modTimeFromFS == modTimeFromDb )
@@ -736,13 +681,13 @@ void App::addFile( const CUL::String& path, size_t workerId )
     }
     else
     {
-        setWorkerStatus( "[File changed, calcualte md5...]" + path, workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path ) );
         md5 = file->getMD5();
-        setWorkerStatus( "[File changed, calcualte md5 done.]" + path, workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path ) );
 
-        setWorkerStatus( "[File adding to db...]" + path, workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path ) );
         m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS );
-        setWorkerStatus( "[File adding to db... done.]" + path, workerId );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path ) );
     }
 }
 
@@ -814,3 +759,11 @@ int main( int argc, char* args[] )
 
     return 0;
 }
+
+#if defined( DEBUG_THIS_FILE )
+    #ifdef _MSC_VER
+        #pragma optimize( "", on )
+    #else
+        #pragma clang optimize on
+    #endif
+#endif  // #if defined(DEBUG_THIS_FILE)
