@@ -26,7 +26,7 @@
 #define NFD_NATIVE
 #include "nfd.h"
 
-#if 1 // DEBUG_THIS_FILE
+#if 0 // DEBUG_THIS_FILE
     #define DEBUG_THIS_FILE 1
     #ifdef _MSC_VER
         #pragma optimize( "", off )
@@ -36,23 +36,27 @@
 #endif
 
 
-App* App::s_instance = nullptr;
+CApp* CApp::s_instance = nullptr;
 
 const CUL::String WorkerStatus(int8_t workerId, const CUL::String& status)
 {
     return "[" + CUL::String( workerId ) + "] " + status;
 }
 
-App::App( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
+CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
+    CUL::String dupka("dupka");
+    //dupka.convertToHexData();
+    //dupka.convertFromHexToString();
+
     m_outputFile = "D:\\out.txt";
-    m_maxThreadCount = 3;
+    m_maxThreadCount = 6;
     m_minFileSizeBytes = 32;
     m_maxTasksInQueue = 32;
 }
 
-void App::onInit()
+void CApp::onInit()
 {
     s_instance = this;
     m_continousSearch = false;
@@ -84,7 +88,7 @@ void App::onInit()
     m_thread.run();
 }
 
-int App::callback( void*, int argc, char** argv, char** azColName )
+int CApp::callback( void*, int argc, char** argv, char** azColName )
 {
     m_culInterface->getLogger()->log( "\n\n---------------------------------------------------------------------------------" );
     for( int i = 0; i < argc; ++i )
@@ -97,7 +101,7 @@ int App::callback( void*, int argc, char** argv, char** azColName )
     return 0;
 }
 
-void App::onWindowEvent( const SDL2W::WindowEvent::Type e )
+void CApp::onWindowEvent( const SDL2W::WindowEvent::Type e )
 {
     if( e == SDL2W::WindowEvent::Type::CLOSE )
     {
@@ -106,7 +110,7 @@ void App::onWindowEvent( const SDL2W::WindowEvent::Type e )
     }
 }
 
-void App::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
+void CApp::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
 {
     if( keys.at("Q") )
     {
@@ -115,7 +119,7 @@ void App::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
     }
 }
 
-void App::timerThread()
+void CApp::timerThread()
 {
     while( m_runTimer )
     {
@@ -124,17 +128,19 @@ void App::timerThread()
     }
 }
 
-void App::customFrame()
+void CApp::customFrame()
 {
 }
 
+#if defined(CUL_WINDOWS)
 std::string wstring_to_utf8( const std::wstring& str )
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
     return myconv.to_bytes( str );
 }
+#endif // #if defined(CUL_WINDOWS)
 
-void App::guiIteration()
+void CApp::guiIteration()
 {
     CUL::String name = "MAIN";
     ImGui::Begin( name.cStr(), nullptr,
@@ -142,14 +148,14 @@ void App::guiIteration()
 
     auto winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
 
-    ImGui::SetWindowPos( { winSize.w * 0.2f, 0 } );
+    ImGui::SetWindowPos( { (float)winSize.w * 0.2f, 0 } );
 
     const auto targetWidht = (float)winSize.w * 0.8f;
     const auto targetHeight = (float)winSize.h * 1.f;
 
     ImGui::SetWindowSize( { targetWidht, targetHeight } );
 
-    ImGui::Text( "Dirs to check:" );
+    ImGui::TextUnformatted( "Dirs to check:" );
     if( ImGui::Button( "+" ) )
     {
         addSearchDir();
@@ -167,7 +173,7 @@ void App::guiIteration()
     {
         for( size_t i = 0; i < pathsCount; ++i )
         {
-            ImGui::Text( m_searchPaths[i].cStr() );
+            ImGui::TextUnformatted( m_searchPaths[i].cStr() );
         }
     }
 
@@ -178,7 +184,7 @@ void App::guiIteration()
 
     ImGui::SameLine();
 
-    ImGui::Text( m_outputFile.cStr() );
+    ImGui::TextUnformatted( m_outputFile.cStr() );
 
     if( ImGui::Button( "Add worker" ) )
     {
@@ -210,18 +216,9 @@ void App::guiIteration()
 
     {
         std::string textCopy;
+        std::lock_guard<std::mutex> guard( m_foundFileMtx );
         {
-            std::lock_guard<std::mutex> guard( m_foundFileMtx );
-            {
-                textCopy = m_foundFile.string();
-            }
-        }
-
-        if( false && !textCopy.empty() )
-        {
-            ImGui::Text( "Found file: " );
-            ImGui::SameLine();
-            ImGui::Text( textCopy.c_str() );
+            textCopy = m_foundFile.string();
         }
     }
 
@@ -229,13 +226,13 @@ void App::guiIteration()
         std::lock_guard<std::mutex> lock( m_statusMutex );
         if( !m_statusText.empty() )
         {
-            ImGui::Text( "Search status: " );
+            ImGui::TextUnformatted( "Search status: " );
             ImGui::SameLine();
             std::string status = m_statusText.string();
-            ImGui::Text( status.c_str() );
+            ImGui::TextUnformatted( status.c_str() );
 
             std::string textValue = "Files procesed: " + std::to_string( m_percentage ) + " %%";
-            ImGui::Text( textValue.c_str() );
+            ImGui::TextUnformatted( textValue.c_str() );
         }
     }
 
@@ -258,7 +255,7 @@ void App::guiIteration()
                 m_searchThread.join();
             }
 
-            m_searchThread = std::thread( &App::searchOneTime, this );
+            m_searchThread = std::thread( &CApp::searchOneTime, this );
         }
 
         ImGui::TableNextRow();
@@ -270,7 +267,7 @@ void App::guiIteration()
                 m_searchThread.join();
             }
 
-            m_searchThread = std::thread( &App::searchBackground, this );
+            m_searchThread = std::thread( &CApp::searchBackground, this );
         }
 
         CUL::String taskDoneAsString = CUL::String( m_filesDone );
@@ -289,10 +286,10 @@ void App::guiIteration()
         const CUL::String logText = percentageAsString + " done. ";
 
         ImGui::TableSetColumnIndex( 1 );
-        ImGui::Text( logText.cStr(), 0 );
+        ImGui::TextUnformatted( logText.cStr());
 
         ImGui::TableSetColumnIndex( 2 );
-        ImGui::Text( m_currentFileText.cStr(), 0 );
+        ImGui::TextUnformatted( m_currentFileText.cStr() );
 
         ImGui::EndTable();
     }
@@ -303,21 +300,26 @@ void App::guiIteration()
 
         for( const auto& status : statuses )
         {
-            const auto someString = wstring_to_utf8( status.getString() );
+#if defined( CUL_WINDOWS )
+            const CUL::String someString = wstring_to_utf8( status.getString() );
+#else
+            const CUL::String someString = status;
+#endif // #if defined(CUL_WINDOWS)
 
-            ImGui::TextUnformatted( someString.c_str() );
+            ImGui::TextUnformatted( someString.cStr() );
         }
     }
 
     ImGui::End();
 }
 
-void App::addSearchDir()
+void CApp::addSearchDir()
 {
     NFD_Init();
 
     nfdchar_t* outPath = nullptr;
-    nfdfilteritem_t filterItem = {};
+    // Unused for now.
+    //nfdfilteritem_t filterItem = {};
     nfdresult_t result = NFD_PickFolder( &outPath, nullptr );
     if( result == NFD_OKAY )
     {
@@ -338,17 +340,21 @@ void App::addSearchDir()
     m_logger->log( "found?" );
 }
 
-void App::removeDir()
+void CApp::removeDir()
 {
     m_searchPaths.pop_back();
 }
 
-void App::chooseResultFile()
+void CApp::chooseResultFile()
 {
     NFD_Init();
 
     nfdchar_t* outPath = nullptr;
+#if defined(CUL_WINDOWS)
     nfdfilteritem_t filter = { L"*.txt", L"*.txt" };
+#else // #if defined(CUL_WINDOWS)
+    nfdfilteritem_t filter = { "*.txt", "*.txt" };
+#endif // #if defined(CUL_WINDOWS)
     nfdresult_t result = NFD_SaveDialog( &outPath, &filter, 1, nullptr, nullptr );
     if( result == NFD_OKAY )
     {
@@ -367,11 +373,11 @@ void App::chooseResultFile()
     m_logger->log( "found?" );
 }
 
-void App::onMouseEvent( const SDL2W::MouseData& )
+void CApp::onMouseEvent( const SDL2W::MouseData& )
 {
 }
 
-void App::searchOneTime()
+void CApp::searchOneTime()
 {
     m_culInterface->getLogger()->log( CUL::String( "Start search." ) );
     m_searchStarted = true;
@@ -388,7 +394,7 @@ void App::searchOneTime()
                 m_foundFile = path.getPath();
             }
             m_filesCount = m_filesCount + 1.f;
-            addTask( [this, path] ( size_t workerId){
+            addTask( [this, path] ( int8_t workerId){
                 CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, path.getPath() ) );
                 addFile( path.getPath().string(), workerId );
                 CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
@@ -405,10 +411,8 @@ void App::searchOneTime()
     m_culInterface->getLogger()->log( "\nDONE.");
 }
 
-void App::searchBackground()
+void CApp::searchBackground()
 {
-    auto culFF = m_culInterface->getFS();
-
     CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
     loadDbTask->Callback = [this]( int8_t workerId ) {
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "loading data from db..." ) );
@@ -458,7 +462,7 @@ void App::searchBackground()
 
     CUL::TaskCallback* deleteDeletedFileFromBase = new CUL::TaskCallback();
     deleteDeletedFileFromBase->Type = CUL::ITask::EType::Loop;
-    deleteDeletedFileFromBase->Callback = [this, saveTask]( int8_t workerId ) {
+    deleteDeletedFileFromBase->Callback = [this, saveTask]( int8_t /*workerId*/ ) {
         if( m_run == false )
         {
             saveTask->Type = CUL::ITask::EType::DeleteAfterExecute;
@@ -466,9 +470,8 @@ void App::searchBackground()
 
         if( m_loadingDb == false )
         {
-            m_culInterface->getLogger()->log( "deleteRemnants::START" );
+            saveTask->Name = "DB remove not existing files from database.";
             m_fileDb.deleteRemnants();
-            m_culInterface->getLogger()->log( "deleteRemnants::STOP" );
         }
     };
     CUL::MultiWorkerSystem::getInstance().startTask( deleteDeletedFileFromBase );
@@ -514,24 +517,18 @@ void App::searchBackground()
     }
 }
 
-void App::setMainStatus( const CUL::String& status )
+void CApp::setMainStatus( const CUL::String& status )
 {
     std::lock_guard<std::mutex> lock( m_statusMutex );
     m_statusText = status;
 }
 
-void App::searchAllFiles()
+void CApp::searchAllFiles()
 {
     auto culFF = m_culInterface->getFS();
     for( const auto& m_searchPath : m_searchPaths )
     {
         culFF->ListAllFiles( m_searchPath, [this] ( const CUL::FS::Path& path ){
-
-
-            if( path.getPath().contains( "out.txt" ) )
-            {
-                auto x = 0;
-            }
             if( !path.getIsDir() && path != m_outputFile )
             {
                 ++m_filesTotalCount;
@@ -540,12 +537,12 @@ void App::searchAllFiles()
                     m_foundFile = path.getPath();
                 }
 
-                addTask( [this, path] ( size_t workerId ){
+                addTask( [this, path] ( int8_t workerId ){
                     const CUL::String pathAsString = path.getPath();
                     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Searching files..." ) );
                     addFile( pathAsString, workerId );
                     ++m_readFilesCount;
-                    m_percentage = 100.f * m_readFilesCount / ( 1.f * m_filesTotalCount );
+                    m_percentage = 100.f * m_readFilesCount / ( 1.f * (float)m_filesTotalCount );
                 } );
             }
         } );
@@ -553,7 +550,7 @@ void App::searchAllFiles()
     setMainStatus( "Searching files... done." );
 }
 
-void App::saveDuplicatesToFile()
+void CApp::saveDuplicatesToFile()
 {
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
     CUL::String status;
@@ -586,7 +583,7 @@ void App::saveDuplicatesToFile()
                     const auto duplicatesList = m_fileDb.getFiles( size, md5 );
                     if( duplicatesList.size() > 1 )
                     {
-                        const float MegaBytes = 1.f * size / ( 1.f * bytesINMegabyte );
+                        const float MegaBytes = 1.f * static_cast<float>( size ) / ( 1.f * bytesINMegabyte );
                         text = CUL::String( "Size: " ) + CUL::String( MegaBytes ) + CUL::String( "MB" );
                         file->addLine( text );
 
@@ -601,7 +598,8 @@ void App::saveDuplicatesToFile()
                     }
                 }
             }
-            status = CUL::String( "Saved duplicate: " ) + CUL::String( ( 100.f * i ) / ( 1.f * listOfSizesSize ) ) + "%";
+            status = CUL::String( "Saved duplicate: " ) +
+                     CUL::String( ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) ) + "%";
             CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
         }
     }
@@ -609,7 +607,7 @@ void App::saveDuplicatesToFile()
     delete file;
 }
 
-std::set<CUL::String> App::getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList )
+std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList )
 {
     std::set<CUL::String> result;
 
@@ -621,13 +619,13 @@ std::set<CUL::String> App::getListOfMd5s( const std::vector<CUL::FS::FileDatabas
     return result;
 }
 
-void App::startWorkers()
+void CApp::startWorkers()
 {
     m_workersEnabled = true;
     CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
 }
 
-void App::addTask( std::function<void( int8_t )> task )
+void CApp::addTask( std::function<void( int8_t )> task )
 {
     while( CUL::MultiWorkerSystem::getInstance().getTasksLeft() > m_maxTasksInQueue )
     {
@@ -641,7 +639,7 @@ void App::addTask( std::function<void( int8_t )> task )
     CUL::MultiWorkerSystem::getInstance().startTask( taskPtr );
 }
 
-void App::addFile( const CUL::String& path, size_t workerId )
+void CApp::addFile( const CUL::String& path, int8_t workerId )
 {
     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path ) );
 
@@ -691,15 +689,15 @@ void App::addFile( const CUL::String& path, size_t workerId )
     }
 }
 
-void App::addFileToList( const CUL::String path )
+void CApp::addFileToList( const CUL::String )
 {
 }
 
-void App::addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& inPath )
+void CApp::addDuplicate( const FileSize, const MD5Value&, const CUL::FS::Path& )
 {
 }
 
-CUL::String App::getModTimeFromDb( const CUL::String& filePath )
+CUL::String CApp::getModTimeFromDb( const CUL::String& filePath )
 {
     auto info = m_fileDb.getFileInfo( filePath );
 
@@ -711,7 +709,7 @@ CUL::String App::getModTimeFromDb( const CUL::String& filePath )
     return "";
 }
 
-void App::addForCheckForDeletionList( const CUL::String& inPath )
+void CApp::addForCheckForDeletionList( const CUL::String& inPath )
 {
     const auto it =  std::find_if( m_deletionList.begin(), m_deletionList.end(), [inPath] ( const CUL::String& path ){
         return path == inPath;
@@ -721,21 +719,17 @@ void App::addForCheckForDeletionList( const CUL::String& inPath )
     {
         m_deletionList.push_back( inPath );
     }
-    else
-    {
-        auto x = 0;
-    }
 }
 
-void App::getList()
+void CApp::getList()
 {
 }
 
-void App::printCurrentMean()
+void CApp::printCurrentMean()
 {
 }
 
-App::~App()
+CApp::~CApp()
 {
     // BYE!
 }
@@ -753,7 +747,7 @@ int main( int argc, char* args[] )
         height = "800";
     }
 
-    App app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, cu.getArgs().getArgsValVec()[0].cStr(),
+    CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, cu.getArgs().getArgsValVec()[0].cStr(),
              "Config.txt" );
     app.run();
 

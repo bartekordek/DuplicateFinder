@@ -34,29 +34,34 @@ using MD5Value = CUL::String;
 using Value = std::map<MD5Value, std::vector<CUL::FS::Path>>;
 
 
-struct MD5Group
+struct SMD5Group
 {
     MD5Value md5;
     std::list<CUL::FS::Path> files;
 };
 
-struct FileGroup
+struct SFileGroup
 {
     FileSize fileSize = 0u;
-    std::map<MD5Value, MD5Group> MD5Group;
+    std::map<MD5Value, SMD5Group> MD5Group;
 };
 
-class App final: public LOGLW::IGameEngineApp
+class CApp final: public LOGLW::IGameEngineApp
 {
 public:
-    App( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath );
+    CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath );
+
+    CApp( const CApp& ) = delete;
+    CApp( CApp&& ) = delete;
+    CApp& operator=( const CApp& ) = delete;
+    CApp& operator=( CApp&& ) = delete;
 
     void addForCheckForDeletionList( const CUL::String& path );
 
     int callback( void* NotUsed, int argc, char** argv, char** azColName );
-    static App* s_instance;
+    static CApp* s_instance;
 
-    ~App();
+    ~CApp();
 
 protected:
 private:
@@ -82,7 +87,7 @@ private:
     void searchBackground();
     std::atomic_bool m_runBackground = false;
 
-    void addFile( const CUL::String& path, size_t workerId );
+    void addFile( const CUL::String& path, int8_t workerId );
     void addFileToList( const CUL::String path );
 
     void addTask( std::function<void( int8_t )> task );
@@ -135,7 +140,7 @@ private:
     size_t m_maxThreadCount = 7;
 
     std::mutex m_duplicatesMtx;
-    std::map<FileSize, FileGroup> m_duplicates;
+    std::map<FileSize, SFileGroup> m_duplicates;
 
     std::atomic_bool m_workersEnabled = false;
 
