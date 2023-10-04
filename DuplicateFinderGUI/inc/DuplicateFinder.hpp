@@ -163,10 +163,7 @@ private:
 
     bool m_searchStarted = false;
 
-    std::mutex m_foundFileMtx;
-    CUL::String m_foundFile;
-
-    int m_minFileSizeBytes = 256;
+    std::atomic<uint64_t> m_minFileSizeBytes{ 256 };
 
     bool m_initialDbFilesUpdated = false;
     CUL::FS::FileDatabase m_fileDb;

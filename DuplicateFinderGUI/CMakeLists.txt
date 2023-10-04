@@ -11,7 +11,7 @@ project( ${PROJECT_NAME_DYNAMIC} LANGUAGES CXX)
 project( ${PROJECT_NAME_STATIC} LANGUAGES CXX)
 
 if (MSVC)
-    add_compile_options( /W2 )
+    add_compile_options( /Wall )
     add_compile_options( /MP )
 else()
     add_compile_options(-Wall -Wextra -pedantic -Werror)
