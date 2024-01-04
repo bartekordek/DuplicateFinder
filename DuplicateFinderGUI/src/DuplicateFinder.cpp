@@ -714,6 +714,11 @@ void CApp::setWorkersCount( uint8_t targetCount )
             CUL::MultiWorkerSystem::getInstance().addWorker( CUL::EPriority::Medium );
             workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
         }
+        else if( workersCount > targetCount )
+        {
+            CUL::MultiWorkerSystem::getInstance().removeWorker( CUL::EPriority::Medium );
+            workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
+        }
     }
 }
 
