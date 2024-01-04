@@ -74,7 +74,7 @@ private:
         CUL::String modTime;
         CUL::String path;
     };
-
+    void setWorkersCount( uint8_t workersCount );
 
     void onInit() override;
     void onWindowEvent( const SDL2W::WindowEvent::Type e ) override;
@@ -105,6 +105,7 @@ private:
     std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList );
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
+    void showList();
 
     CUL::String m_outputFile;
     std::vector<CUL::String> m_searchPaths;

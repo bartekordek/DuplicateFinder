@@ -52,7 +52,7 @@ CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, cons
 
     m_outputFile = "D:\\out.txt";
     m_maxThreadCount = 3;
-    m_minFileSizeBytes = 2;
+    m_minFileSizeBytes = 1024;
     m_maxTasksInQueue = 32;
 }
 
@@ -196,7 +196,7 @@ void CApp::guiIteration()
         }
 
         m_workersCountThread = std::thread( [this]() {
-            CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
+            setWorkersCount( m_maxThreadCount );
         } );
     }
 
@@ -210,7 +210,7 @@ void CApp::guiIteration()
         }
 
         m_workersCountThread = std::thread( [this]() {
-            CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
+            setWorkersCount( m_maxThreadCount );
         } );
     }
 
@@ -218,12 +218,12 @@ void CApp::guiIteration()
     constexpr int mByte = kByte * 1024;
     constexpr int maxBytes = mByte * 2;  // 1024 MBytes;
     int value = m_minFileSizeBytes;
-    if(ImGui::SliderInt("Minimum file size - bytes.", &value, 0, maxBytes))
+    if( ImGui::DragInt( "Minimum file size - bytes.", &value, 1.f, 0, 1024 * 1024 ) )
     {
         m_minFileSizeBytes = value;
     }
 
-    if(ImGui::Button("Increase minimum file size"))
+    if( ImGui::Button( "Increase minimum file size" ) )
     {
         m_minFileSizeBytes += 32;
     }
@@ -233,8 +233,8 @@ void CApp::guiIteration()
         m_minFileSizeBytes -= 32;
     }
 
-
-    static ImGuiTableFlags flags = ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
+    static ImGuiTableFlags flags =
+        ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable;
 
     if( ImGui::BeginTable( "split", 3, flags ) )
     {
@@ -283,13 +283,15 @@ void CApp::guiIteration()
         const CUL::String logText = percentageAsString + " done. ";
 
         ImGui::TableSetColumnIndex( 1 );
-        ImGui::TextUnformatted( logText.cStr());
+        ImGui::TextUnformatted( logText.cStr() );
 
         ImGui::TableSetColumnIndex( 2 );
         ImGui::TextUnformatted( m_currentFileText.cStr() );
 
         ImGui::EndTable();
     }
+
+    // showList();
 
     if( m_searchStarted )
     {
@@ -301,7 +303,7 @@ void CApp::guiIteration()
             const CUL::String someString = wstring_to_utf8( status.getString() );
 #else
             const CUL::String someString = status;
-#endif // #if defined(CUL_WINDOWS)
+#endif  // #if defined(CUL_WINDOWS)
 
             ImGui::TextUnformatted( someString.cStr() );
         }
@@ -416,7 +418,8 @@ void CApp::searchBackground()
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
     };
     loadDbTask->Type = CUL::ITask::EType::DeleteAfterExecute;
-    CUL::MultiWorkerSystem::getInstance().startTask( loadDbTask );
+    loadDbTask->Priority = CUL::EPriority::High;
+    CUL::MultiWorkerSystem::getInstance().registerTask( loadDbTask );
 
     CUL::TaskCallback* searchTask = new CUL::TaskCallback();
     searchTask->Type = CUL::ITask::EType::Loop;
@@ -431,7 +434,7 @@ void CApp::searchBackground()
             searchTask->Type = CUL::ITask::EType::DeleteAfterExecute;
         }
     };
-    CUL::MultiWorkerSystem::getInstance().startTask( searchTask );
+    CUL::MultiWorkerSystem::getInstance().registerTask( searchTask );
 
     CUL::TaskCallback* saveTask = new CUL::TaskCallback();
     saveTask->Type = CUL::ITask::EType::Loop;
@@ -450,7 +453,7 @@ void CApp::searchBackground()
         }
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Idle." ) );
     };
-    CUL::MultiWorkerSystem::getInstance().startTask( saveTask );
+    CUL::MultiWorkerSystem::getInstance().registerTask( saveTask );
 
     CUL::TaskCallback* deleteDeletedFileFromBase = new CUL::TaskCallback();
     deleteDeletedFileFromBase->Type = CUL::ITask::EType::Loop;
@@ -466,9 +469,9 @@ void CApp::searchBackground()
             m_fileDb.deleteRemnants();
         }
     };
-    CUL::MultiWorkerSystem::getInstance().startTask( deleteDeletedFileFromBase );
+    CUL::MultiWorkerSystem::getInstance().registerTask( deleteDeletedFileFromBase );
 
-
+   
     startWorkers();
     m_searchStarted = true;
 
@@ -540,6 +543,67 @@ void CApp::searchAllFiles()
     setMainStatus( "Searching files... done." );
 }
 
+void CApp::showList()
+{
+    const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
+    const auto listOfSizes = m_fileDb.getListOfSizes();
+    const size_t listOfSizesSize = listOfSizes.size();
+    bool save = false;
+    std::int64_t md5It = 0;
+    std::int64_t maxMd5s = 4;
+    bool exitLoop = false;
+    CUL::String status;
+    for( std::int64_t i = listOfSizesSize - 1; i >= 0; --i )
+    {
+        const auto size = listOfSizes[i];
+        if( size < m_minFileSizeBytes )
+        {
+            continue;
+        }
+
+        if( exitLoop )
+        {
+            exitLoop = false;
+            break;
+        }
+
+        const auto sameSizeFiles = m_fileDb.getFiles( size );
+        if( sameSizeFiles.size() > 1 )
+        {
+            const auto md5s = getListOfMd5s( sameSizeFiles );
+            for( const auto& md5 : md5s )
+            {
+                const auto duplicatesList = m_fileDb.getFiles( size, md5 );
+                if( duplicatesList.size() > 1 )
+                {
+                    const CUL::String current = "Size: " + CUL::String( size ) + ", MD5: " + md5;
+                    if( ImGui::TreeNode( current.cStr() ) )
+                    {
+                        const float MegaBytes = 1.f * static_cast<float>( size ) / ( 1.f * bytesINMegabyte );
+
+                        for( const auto fileInfo : duplicatesList )
+                        {
+                            ImGui::TextUnformatted( fileInfo.FilePath.getPath().cStr() );
+                        }
+                        ++md5It;
+
+                        if( md5It > maxMd5s )
+                        {
+                            md5It = 0;
+                            exitLoop = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        status = CUL::String( "Saved duplicate: " ) +
+                 CUL::String( ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) ) + "%, ";
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+    }
+}
+
 void CApp::saveDuplicatesToFile()
 {
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
@@ -552,16 +616,27 @@ void CApp::saveDuplicatesToFile()
     m_culInterface->getLogger()->log( text );
     file->addLine( text );
 
-    const std::vector<uint64_t> listOfSizes = m_fileDb.getListOfSizes();
+    auto listOfSizes = m_fileDb.getListOfSizes();
+    listOfSizes.erase( std::remove_if( listOfSizes.begin(), listOfSizes.end(),
+                                       [this]( uint64_t val ) {
+                                           return val < m_minFileSizeBytes;
+                             } ),
+                       listOfSizes.end() );
+
     const size_t listOfSizesSize = listOfSizes.size();
 
     bool save = false;
-    for( size_t i = 0; i < listOfSizesSize; ++i )
+    std::int64_t md5It = 0;
+    std::int64_t maxMd5s = 128;
+    bool exitLoop = false;
+    for( std::int64_t i = listOfSizesSize - 1; i>=0; --i )
     {
-        const uint64_t size = listOfSizes[i];
-        if( size < m_minFileSizeBytes )
+        const auto size = listOfSizes[i];
+
+        if( exitLoop )
         {
-            continue;
+            exitLoop = false;
+            break;
         }
 
         const auto sameSizeFiles = m_fileDb.getFiles( size );
@@ -585,7 +660,14 @@ void CApp::saveDuplicatesToFile()
                         file->addLine( fileInfo.FilePath );
                         save = true;
                     }
+                    ++md5It;
 
+                    if( md5It > maxMd5s )
+                    {
+                        md5It = 0;
+                        exitLoop = true;
+                        break;
+                    }
                 }
             }
         }
@@ -596,9 +678,8 @@ void CApp::saveDuplicatesToFile()
             save = false;
         }
 
-        status = CUL::String( "Saved duplicate: " ) +
-                 CUL::String( ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) ) + "%, ";
-        status += CUL::String( i ) + "/" + CUL::String( listOfSizesSize );
+        status = CUL::String( "Saved duplicate: " ) + CUL::String( ( 100.f * static_cast<float>( md5It ) ) / ( 1.f * (float)maxMd5s ) ) + "%, ";
+        status += CUL::String( md5It ) + "/" + CUL::String( maxMd5s );
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
     }
 
@@ -620,12 +701,25 @@ std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileDataba
 void CApp::startWorkers()
 {
     m_workersEnabled = true;
-    CUL::MultiWorkerSystem::getInstance().setWorkersCount( m_maxThreadCount );
+    setWorkersCount( m_maxThreadCount );
+}
+
+void CApp::setWorkersCount( uint8_t targetCount )
+{
+    uint8_t workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
+    while( workersCount != targetCount )
+    {
+        if( workersCount < targetCount )
+        {
+            CUL::MultiWorkerSystem::getInstance().addWorker( CUL::EPriority::Medium );
+            workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
+        }
+    }
 }
 
 void CApp::addTask( std::function<void( int8_t )> task )
 {
-    while( CUL::MultiWorkerSystem::getInstance().getTasksLeft() > m_maxTasksInQueue )
+    while( CUL::MultiWorkerSystem::getInstance().getTasksLeft(CUL::EPriority::Medium) > m_maxTasksInQueue )
     {
         CUL::ITimer::sleepMiliSeconds( 64 );
     }
@@ -634,7 +728,7 @@ void CApp::addTask( std::function<void( int8_t )> task )
     taskPtr->Callback = task;
     taskPtr->Type = CUL::ITask::EType::DeleteAfterExecute;
 
-    CUL::MultiWorkerSystem::getInstance().startTask( taskPtr );
+    CUL::MultiWorkerSystem::getInstance().registerTask( taskPtr );
 }
 
 void CApp::addFile( const CUL::String& path, int8_t workerId )
@@ -648,7 +742,7 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     std::unique_ptr<CUL::FS::IFile> file;
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
     CUL::String fileSize = file->getSizeBytes();
-    const uint64_t sizeBytes = fileSize.toInt64();
+    const auto sizeBytes = fileSize.toInt64();
     if( sizeBytes < m_minFileSizeBytes )
     {
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File too small, aborting.]" ) );
@@ -673,7 +767,7 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
 
     if( modTimeFromFS == modTimeFromDb )
     {
-
+        
     }
     else
     {
