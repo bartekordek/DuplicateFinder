@@ -15,6 +15,113 @@ NAMESPACE_BEGIN( CUL )
 class CULInterface;
 NAMESPACE_END( CUL )
 
+template<class Class, class KeyType>
+class Group final
+{
+public:
+    struct Entry
+    {
+        KeyType Key;
+        Class Value;
+    };
+
+    Group()
+    {
+    }
+
+    Group( const Group& otherGroup )
+    {
+        std::lock_guard<std::mutex> guard( m_inputMapMtx );
+        std::lock_guard<std::mutex> guard( otherGroup.m_inputMapMtx );
+
+        m_inputMap = otherGroup.m_inputMap;
+    }
+
+    Group( Group&& otherGroup )
+    {
+        std::lock_guard<std::mutex> guard( m_inputMapMtx );
+        std::lock_guard<std::mutex> guard( otherGroup.m_inputMapMtx );
+
+        m_inputMap = std::move( otherGroup.m_inputMap );
+    }
+
+    Group& operator=( const Group& otherGroup )
+    {
+        if( this != &otherGroup )
+        {
+            std::lock_guard<std::mutex> guard( m_inputMapMtx );
+            std::lock_guard<std::mutex> guard( otherGroup.m_inputMapMtx );
+
+            m_inputMap = otherGroup.m_inputMap;
+        }
+
+        return *this;
+    }
+
+    Group& operator=( Group&& otherGroup )
+    {
+        if( this != &otherGroup )
+        {
+            std::lock_guard<std::mutex> guard( m_inputMapMtx );
+            std::lock_guard<std::mutex> guard( otherGroup.m_inputMapMtx );
+
+            m_inputMap = std::move( otherGroup.m_inputMap );
+        }
+
+        return *this;
+    }
+
+    void add( KeyType key, Class& value )
+    {
+        std::lock_guard<std::mutex> guard( m_inputMapMtx );
+        Entry entry{ key, value };
+        m_inputMap.push_back( entry );
+        sort();
+    }
+
+    const Class* getPtr( KeyType key ) const
+    {
+        Class* result = nullptr;
+
+        {
+            std::lock_guard<std::mutex> guard( m_inputMapMtx );
+            if( it != m_inputMap.end() )
+            {
+                result = it->second;
+            }
+        }
+
+        return result;
+    }
+
+    void remove( KeyType key )
+    {
+        std::lock_guard<std::mutex> guard( m_inputMapMtx );
+        const auto it = std::find_if( m_inputMap.begin(), m_inputMap.end(), []( const Entry& current ) {
+            return current.Key == key;
+        } );
+
+        if( it != m_inputMap.end() )
+        {
+            it.erase( m_inputMap + it );
+        }
+    }
+
+protected:
+private:
+    void sort()
+    {
+        std::qsort( m_inputMap.data(), m_inputMap.size(), sizeof( Entry ), []( const Entry& entry1, const Entry& entry2 ) {
+            return entry1.Key > entry2.Key;
+        } )
+    }
+    std::vector<Entry> m_inputMap;
+    std::mutex m_inputMapMtx;
+};
+
+using SameMD5Group = Group<std::string,std::string>;
+using SameSizeGroup = Group<std::int64_t,SameMD5Group>;
+
 class DuplicateFinder final
 {
 public:
@@ -96,4 +203,7 @@ private:
     CUL::GUTILS::ConsoleUtilities m_consoleUtilities;
 
     std::vector<CUL::String> m_deletionList;
+
+
+    SameSizeGroup m_duplicates;
 };

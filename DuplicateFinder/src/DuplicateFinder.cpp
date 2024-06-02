@@ -3,9 +3,12 @@
 #include "CUL/ITimer.hpp"
 #include "CUL/Filesystem/Path.hpp"
 #include "CUL/IMPORT_sqlite3.hpp"
+#include "CUL/IMPORT_tracy.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/ITimer.hpp"
 #include "CUL/Filesystem/FileFactory.hpp"
+
+#include "CUL/IMPORT_tracy.hpp"
 
 DuplicateFinder* DuplicateFinder::s_instance = nullptr;
 
@@ -20,6 +23,7 @@ DuplicateFinder::DuplicateFinder()
 
 void DuplicateFinder::initDb()
 {
+    ZoneScoped;
     int rc = sqlite3_open( "FilesList.db", &m_db );
 
     std::string sqlQuery = "SELECT * \
@@ -64,6 +68,7 @@ int DuplicateFinder::callback( void*, int argc, char** argv, char** azColName )
 
 void DuplicateFinder::search( const std::string& path, const std::string& summaryFilePath )
 {
+    ZoneScoped;
     m_culInterface->getLogger()->log( CUL::String( "Start search." ) );
 
     removeDeletedFilesFromDB();
@@ -78,6 +83,7 @@ void DuplicateFinder::search( const std::string& path, const std::string& summar
 
     for( size_t i = 0; i < fileSizes; ++i)
     {
+        ZoneScoped;
         const CUL::FS::Path& file = filesInDir[i];
         if( file.getIsDir())
         {
@@ -200,6 +206,7 @@ void DuplicateFinder::removeDeletedFilesFromDB()
 
 void DuplicateFinder::addFile( const CUL::String& path )
 {
+    ZoneScoped;
     CUL::ITimer* m_frameTimer = CUL::TimerFactory::getChronoTimer( m_culInterface->getLogger() );
     m_frameTimer->start();
 
@@ -341,6 +348,7 @@ void DuplicateFinder::getParametersFromDb( const CUL::String& filePath )
 
 void DuplicateFinder::addFileFromDb( const CUL::String& path, const CUL::String& size, const CUL::String& md, const CUL::String& modTime )
 {
+    ZoneScoped;
     std::lock_guard<std::mutex> lockGuard( m_filesFromDbMtx );
     FileDb fdb;
     fdb.size = size;

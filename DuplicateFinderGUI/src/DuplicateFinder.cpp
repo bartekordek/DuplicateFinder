@@ -18,6 +18,7 @@
 #include "CUL/GenericUtils/ScopeExit.hpp"
 #include "CUL/Threading/MultiWorkerSystem.hpp"
 #include "CUL/Threading/TaskCallback.hpp"
+#include "CUL/IMPORT_tracy.hpp"
 
 #include "CUL/STL_IMPORTS/STD_future.hpp"
 #include "CUL/STL_IMPORTS/STD_codecvt.hpp"
@@ -58,6 +59,7 @@ CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, cons
 
 void CApp::onInit()
 {
+    ZoneScoped;
     s_instance = this;
     m_continousSearch = false;
 
@@ -90,6 +92,7 @@ void CApp::onInit()
 
 int CApp::callback( void*, int argc, char** argv, char** azColName )
 {
+    ZoneScoped;
     m_culInterface->getLogger()->log( "\n\n---------------------------------------------------------------------------------" );
     for( int i = 0; i < argc; ++i )
     {
@@ -142,6 +145,7 @@ std::string wstring_to_utf8( const std::wstring& str )
 
 void CApp::guiIteration()
 {
+    ZoneScoped;
     CUL::String name = "MAIN";
     ImGui::Begin( name.cStr(), nullptr,
                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar );
@@ -378,6 +382,7 @@ void CApp::onMouseEvent( const SDL2W::MouseData& )
 
 void CApp::searchOneTime()
 {
+    ZoneScoped;
     m_culInterface->getLogger()->log( CUL::String( "Start search." ) );
     m_searchStarted = true;
 
@@ -408,8 +413,10 @@ void CApp::searchOneTime()
 
 void CApp::searchBackground()
 {
+    ZoneScoped;
     CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
     loadDbTask->Callback = [this]( int8_t workerId ) {
+        ZoneScoped;
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "loading data from db..." ) );
         m_loadingDb = true;
         m_fileDb.loadFilesFromDatabase();
@@ -424,6 +431,7 @@ void CApp::searchBackground()
     CUL::TaskCallback* searchTask = new CUL::TaskCallback();
     searchTask->Type = CUL::ITask::EType::Loop;
     searchTask->Callback = [this, searchTask]( int8_t workerId ) {
+        ZoneScoped;
         if( m_run == true )
         {
             searchAllFiles();
@@ -439,6 +447,7 @@ void CApp::searchBackground()
     CUL::TaskCallback* saveTask = new CUL::TaskCallback();
     saveTask->Type = CUL::ITask::EType::Loop;
     saveTask->Callback = [this, saveTask]( int8_t workerId ) {
+        ZoneScoped;
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Saving duplicates..." ) );
         if( m_run == false )
         {
@@ -475,7 +484,7 @@ void CApp::searchBackground()
     startWorkers();
     m_searchStarted = true;
 
-
+   // ZoneScopedN("background_01");
     while( m_runBackground )
     {
         //std::list<FileGroup>::iterator it;
@@ -514,23 +523,28 @@ void CApp::searchBackground()
 
 void CApp::setMainStatus( const CUL::String& status )
 {
+    ZoneScoped;
     std::lock_guard<std::mutex> lock( m_statusMutex );
     m_statusText = status;
 }
 
 void CApp::searchAllFiles()
 {
+    ZoneScoped;
     const int8_t currentThreadWorkerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
 
     auto culFF = m_culInterface->getFS();
     for( const auto& m_searchPath : m_searchPaths )
     {
+        ZoneScoped;
         culFF->ListAllFiles( m_searchPath, [this, currentThreadWorkerId]( const CUL::FS::Path& path ) {
+            ZoneScoped;
             if( !path.getIsDir() && path != m_outputFile )
             {
                 ++m_filesTotalCount;
                 CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath() ) );
                 addTask( [this, path]( int8_t workerId ) {
+                    ZoneScoped;
                     const CUL::String pathAsString = path.getPath();
                     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Adding file: " + pathAsString ) );
                     addFile( pathAsString, workerId );
@@ -545,6 +559,7 @@ void CApp::searchAllFiles()
 
 void CApp::showList()
 {
+    ZoneScoped;
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
     const auto listOfSizes = m_fileDb.getListOfSizes();
     const size_t listOfSizesSize = listOfSizes.size();
@@ -606,6 +621,7 @@ void CApp::showList()
 
 void CApp::saveDuplicatesToFile()
 {
+    ZoneScoped;
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
     CUL::String status;
 
@@ -688,6 +704,7 @@ void CApp::saveDuplicatesToFile()
 
 std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList )
 {
+    ZoneScoped;
     std::set<CUL::String> result;
 
     for( const auto& fi : fiList )
@@ -706,6 +723,7 @@ void CApp::startWorkers()
 
 void CApp::setWorkersCount( uint8_t targetCount )
 {
+    ZoneScoped;
     uint8_t workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
     while( workersCount != targetCount )
     {
@@ -724,6 +742,7 @@ void CApp::setWorkersCount( uint8_t targetCount )
 
 void CApp::addTask( std::function<void( int8_t )> task )
 {
+    ZoneScoped;
     while( CUL::MultiWorkerSystem::getInstance().getTasksLeft(CUL::EPriority::Medium) > m_maxTasksInQueue )
     {
         CUL::ITimer::sleepMiliSeconds( 64 );
@@ -738,6 +757,7 @@ void CApp::addTask( std::function<void( int8_t )> task )
 
 void CApp::addFile( const CUL::String& path, int8_t workerId )
 {
+    ZoneScoped;
     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path ) );
 
     CUL::GUTILS::ScopeExit se( [this, workerId]() {
@@ -755,7 +775,8 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     }
 
     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path ) );
-    const auto modTimeFromFS = file->getLastModificationTime().toString();
+    CUL::Time modTimeFromFS;
+    file->getLastModificationTime( modTimeFromFS );
     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path ) );
     auto info = m_fileDb.getFileInfo( path );
     CUL::String modTimeFromDb;
@@ -770,7 +791,7 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path ) );
     }
 
-    if( modTimeFromFS == modTimeFromDb )
+    if( modTimeFromFS.toString() == modTimeFromDb )
     {
         
     }
@@ -781,7 +802,7 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path ) );
 
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path ) );
-        m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS );
+        m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS.toString() );
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path ) );
     }
 }
@@ -796,11 +817,14 @@ void CApp::addDuplicate( const FileSize, const MD5Value&, const CUL::FS::Path& )
 
 CUL::String CApp::getModTimeFromDb( const CUL::String& filePath )
 {
+    ZoneScoped;
     auto info = m_fileDb.getFileInfo( filePath );
 
     if( !info.MD5.empty() )
     {
-        return info.FilePath.getLastModificationTime().toString();
+        CUL::Time currentTime;
+        info.FilePath.getLastModificationTime( currentTime );
+        return currentTime.toString();
     }
 
     return "";
@@ -808,6 +832,7 @@ CUL::String CApp::getModTimeFromDb( const CUL::String& filePath )
 
 void CApp::addForCheckForDeletionList( const CUL::String& inPath )
 {
+    ZoneScoped;
     const auto it =  std::find_if( m_deletionList.begin(), m_deletionList.end(), [inPath] ( const CUL::String& path ){
         return path == inPath;
     } );
