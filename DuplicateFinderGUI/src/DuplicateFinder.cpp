@@ -47,10 +47,6 @@ const CUL::String WorkerStatus(int8_t workerId, const CUL::String& status)
 CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
-    CUL::String dupka("dupka");
-    //dupka.convertToHexData();
-    //dupka.convertFromHexToString();
-
     m_outputFile = "D:\\out.txt";
     m_maxThreadCount = 3;
     m_minFileSizeBytes = 1024;
@@ -295,21 +291,13 @@ void CApp::guiIteration()
         ImGui::EndTable();
     }
 
-    // showList();
-
     if( m_searchStarted )
     {
         const auto statuses = CUL::MultiWorkerSystem::getInstance().getWorkersStatuses();
 
         for( const auto& status : statuses )
         {
-#if defined( CUL_WINDOWS )
-            const CUL::String someString = wstring_to_utf8( status.getString() );
-#else
-            const CUL::String someString = status;
-#endif  // #if defined(CUL_WINDOWS)
-
-            ImGui::TextUnformatted( someString.cStr() );
+            ImGui::TextUnformatted( status.cStr() );
         }
     }
 
@@ -484,7 +472,7 @@ void CApp::searchBackground()
     startWorkers();
     m_searchStarted = true;
 
-   // ZoneScopedN("background_01");
+
     while( m_runBackground )
     {
         //std::list<FileGroup>::iterator it;
@@ -538,7 +526,6 @@ void CApp::searchAllFiles()
     {
         ZoneScoped;
         culFF->ListAllFiles( m_searchPath, [this, currentThreadWorkerId]( const CUL::FS::Path& path ) {
-            ZoneScoped;
             if( !path.getIsDir() && path != m_outputFile )
             {
                 ++m_filesTotalCount;
@@ -562,7 +549,7 @@ void CApp::showList()
     ZoneScoped;
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
     const auto listOfSizes = m_fileDb.getListOfSizes();
-    const size_t listOfSizesSize = listOfSizes.size();
+    const std::int64_t listOfSizesSize = static_cast<const std::int64_t>( listOfSizes.size() );
     bool save = false;
     std::int64_t md5It = 0;
     std::int64_t maxMd5s = 4;
@@ -642,11 +629,16 @@ void CApp::saveDuplicatesToFile()
     const size_t listOfSizesSize = listOfSizes.size();
 
     bool save = false;
-    std::int64_t md5It = 0;
+    std::size_t md5It = 0;
     std::int64_t maxMd5s = 128;
     bool exitLoop = false;
+
+    float wholePercentage = 0.f;
+    float currentMd5Percentage = 0.f;
+
     for( std::int64_t i = listOfSizesSize - 1; i>=0; --i )
     {
+        currentMd5Percentage = 0.f;
         const auto size = listOfSizes[i];
 
         if( exitLoop )
@@ -659,6 +651,9 @@ void CApp::saveDuplicatesToFile()
         if( sameSizeFiles.size() > 1 )
         {
             const auto md5s = getListOfMd5s( sameSizeFiles );
+            const std::size_t md5Count = md5s.size();
+            
+            md5It = 0u;
             for( const auto& md5 : md5s )
             {
                 const auto duplicatesList = m_fileDb.getFiles( size, md5 );
@@ -677,13 +672,11 @@ void CApp::saveDuplicatesToFile()
                         save = true;
                     }
                     ++md5It;
-
-                    if( md5It > maxMd5s )
-                    {
-                        md5It = 0;
-                        exitLoop = true;
-                        break;
-                    }
+                    currentMd5Percentage = 100.f * md5It / static_cast<float>(md5Count);
+                    wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
+                    status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +
+                             "%, md5:" + CUL::String( currentMd5Percentage ) + "%";
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
                 }
             }
         }
@@ -694,8 +687,8 @@ void CApp::saveDuplicatesToFile()
             save = false;
         }
 
-        status = CUL::String( "Saved duplicate: " ) + CUL::String( ( 100.f * static_cast<float>( md5It ) ) / ( 1.f * (float)maxMd5s ) ) + "%, ";
-        status += CUL::String( md5It ) + "/" + CUL::String( maxMd5s );
+        wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
+        status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +"%, md5: " + CUL::String( currentMd5Percentage ) + "%";
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
     }
 
@@ -763,6 +756,13 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     CUL::GUTILS::ScopeExit se( [this, workerId]() {
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
     } );
+
+
+    CUL::FS::Path fp = path;
+    if( fp.exists() == false )
+    {
+        return;
+    }
 
     std::unique_ptr<CUL::FS::IFile> file;
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
@@ -858,6 +858,9 @@ CApp::~CApp()
 
 int main( int argc, char* args[] )
 {
+    std::setlocale( LC_ALL, "" );              // for C and C++ where synced with stdio
+    std::locale::global( std::locale( "" ) );  // for C++
+
     CUL::GUTILS::ConsoleUtilities cu;
     cu.setArgs( argc, args );
     auto width = cu.getFlagValue( "-w" );

@@ -117,7 +117,8 @@
             "charconv": "cpp",
             "stop_token": "cpp",
             "xmemory0": "cpp",
-            "xxatomic": "cpp"
+            "xxatomic": "cpp",
+            "cassert": "cpp"
         }
 	}
 }
