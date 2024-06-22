@@ -791,9 +791,9 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path ) );
     }
 
-    if( modTimeFromFS.toString() == modTimeFromDb )
+    const CUL::String currentModTime = modTimeFromFS.toString();
+    if( currentModTime == modTimeFromDb )
     {
-        
     }
     else
     {
