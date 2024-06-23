@@ -548,7 +548,8 @@ void CApp::showList()
 {
     ZoneScoped;
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
-    const auto listOfSizes = m_fileDb.getListOfSizes();
+    std::vector<uint64_t> listOfSizes;
+    m_fileDb.getListOfSizes( listOfSizes );
     const std::int64_t listOfSizesSize = static_cast<const std::int64_t>( listOfSizes.size() );
     bool save = false;
     std::int64_t md5It = 0;
@@ -569,13 +570,15 @@ void CApp::showList()
             break;
         }
 
-        const auto sameSizeFiles = m_fileDb.getFiles( size );
+        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.size() > 1 )
         {
             const auto md5s = getListOfMd5s( sameSizeFiles );
             for( const auto& md5 : md5s )
             {
-                const auto duplicatesList = m_fileDb.getFiles( size, md5 );
+                std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+                m_fileDb.getFiles( size, md5, duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
                     const CUL::String current = "Size: " + CUL::String( size ) + ", MD5: " + md5;
@@ -619,7 +622,8 @@ void CApp::saveDuplicatesToFile()
     m_culInterface->getLogger()->log( text );
     file->addLine( text );
 
-    auto listOfSizes = m_fileDb.getListOfSizes();
+    std::vector<std::uint64_t> listOfSizes;
+    m_fileDb.getListOfSizes( listOfSizes );
     listOfSizes.erase( std::remove_if( listOfSizes.begin(), listOfSizes.end(),
                                        [this]( uint64_t val ) {
                                            return val < m_minFileSizeBytes;
@@ -647,7 +651,8 @@ void CApp::saveDuplicatesToFile()
             break;
         }
 
-        const auto sameSizeFiles = m_fileDb.getFiles( size );
+        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.size() > 1 )
         {
             const auto md5s = getListOfMd5s( sameSizeFiles );
@@ -656,7 +661,8 @@ void CApp::saveDuplicatesToFile()
             md5It = 0u;
             for( const auto& md5 : md5s )
             {
-                const auto duplicatesList = m_fileDb.getFiles( size, md5 );
+                std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+                m_fileDb.getFiles( size, md5, duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
                     const float MegaBytes = 1.f * static_cast<float>( size ) / ( 1.f * bytesINMegabyte );
