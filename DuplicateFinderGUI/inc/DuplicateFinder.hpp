@@ -46,6 +46,19 @@ struct SFileGroup
     std::map<MD5Value, SMD5Group> MD5Group;
 };
 
+struct FileEntry
+{
+    CUL::String Path;
+    CUL::String ModTime;
+};
+
+struct SameFilesGroup
+{
+    MD5Value MD5;
+    CUL::String Size;
+    std::vector<FileEntry> Files;
+};
+
 class CApp final: public LOGLW::IGameEngineApp
 {
 public:
@@ -101,7 +114,8 @@ private:
     void addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& path );
 
     void startWorkers();
-    void saveDuplicatesToFile();
+    void saveDuplicates();
+    void fetchDuplicates();
     std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList );
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
@@ -164,7 +178,7 @@ private:
 
     bool m_searchStarted = false;
 
-    std::atomic<uint64_t> m_minFileSizeBytes{ 256 };
+    std::uint64_t m_minFileSizeBytes{ 256u };
 
     bool m_initialDbFilesUpdated = false;
     CUL::FS::FileDatabase m_fileDb;
@@ -182,5 +196,9 @@ private:
 
     bool m_continousSearch = true;
     bool m_run = true;
-    std::thread m_workersCountThread;
+
+
+    std::uint8_t m_maxFileGroups{ 0u };
+    std::vector<SameFilesGroup> m_fileGroups;
+    std::mutex m_fileGroupsMtx;
 };
