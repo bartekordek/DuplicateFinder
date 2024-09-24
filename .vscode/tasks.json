@@ -4,9 +4,32 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "[LINUX][CMAKE][CREATE DIR]",
+            "type": "shell",
+            "command": "mkdir -p Build-Linux",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+        },
+        {
             "label": "[WINDOWS][CMAKE][CREATE][DEBUG]",
             "type": "shell",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Debug -DTRACY_ENABLE=1 -DFOO_ROOT=/some/path/to/foo ..",
+            "command": "cmake  -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1  .. ",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -30,7 +53,7 @@
         {
             "label": "[WINDOWS][CMAKE][CREATE][RELEASE]",
             "type": "shell",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Release .. -G \"Visual Studio 16 2019\"",
+            "command": "cmake -DCMAKE_BUILD_TYPE=Release .. ",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -54,7 +77,7 @@
         {
             "label": "[WINDOWS][CMAKE][CREATE][RELEASE_WITH_DEBUG_INFO]",
             "type": "shell",
-            "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. -G \"Visual Studio 16 2019\"",
+            "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. ",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -76,9 +99,29 @@
             }
         },
         {
-            "label": "[WINDOWS][DEBUG][DuplicateFinder]",
+            "label": "[WINDOWS][CMAKE][CREATE DIR]",
             "type": "shell",
-            "command": "cmake --build Build-Windows --target DuplicateFinder --config DEBUG -j16",
+            "command": "if not exist \"Build-Windows\" mkdir \"Build-Windows\"",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+        },
+        {
+            "label": "[WINDOWS][DEBUG][DuplicateFinderGUI]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target DuplicateFinderGUI --config DEBUG -j16",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -116,9 +159,9 @@
             }
         },
         {
-            "label": "[LINUX][DEBUG][DuplicateFinderGUI]",
+            "label": "[LINUX][CMAKE][CREATE][DEBUG]",
             "type": "shell",
-            "command": "cmake --build Build-Linux --target DuplicateFinderGUI --config DEBUG -j16",
+            "command": "cmake .. -DCMAKE_BUILD_TYPE=Debug",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -133,6 +176,70 @@
                 "panel": "dedicated",
                 "showReuseMessage": true,
                 "clear": true
+            },
+            "dependsOn": "[LINUX][CMAKE][CREATE DIR]",
+            "options": {
+                "cwd": "${workspaceFolder}/Build-Linux"
+            }
+        },
+        {
+            "label": "[LINUX][DEBUG][DuplicateFinderGUI]",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "Build-Linux",
+                "--config",
+                "DEBUG",
+                "-j16",
+                "--target",
+                "DuplicateFinderGUI"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "[LINUX][DEBUG][DuplicateFinderGUI_01] ",
+            "type": "shell",
+            "command": "make",
+            "args": [
+                "-j14"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}/Build-Linux"
             }
         },
         {
@@ -154,7 +261,7 @@
                 "showReuseMessage": true,
                 "clear": true
             },
-            "dependsOn":"[WINDOWS][CMAKE][CREATE][RELEASE]"
+            "dependsOn": "[WINDOWS][CMAKE][CREATE][RELEASE]"
         },
     ]
 }
