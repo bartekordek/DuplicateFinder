@@ -57,6 +57,7 @@ struct SameFilesGroup
     MD5Value MD5;
     CUL::String Size;
     std::vector<FileEntry> Files;
+    bool Skip{ false };
 };
 
 class CApp final: public LOGLW::IGameEngineApp
@@ -120,6 +121,8 @@ private:
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
     void showList();
+    void getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vector<FileEntry>& files );
+    void scanFileGroupsForDeleted();
 
     CUL::String m_outputFile;
     std::vector<CUL::String> m_searchPaths;

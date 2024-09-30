@@ -280,19 +280,27 @@ void CApp::guiIteration()
 
         if( m_fileGroups.empty() == false )
         {
+            scanFileGroupsForDeleted();
+
             static ImGuiTableFlags flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable |
                                            ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
 
             if( ImGui::BeginTable( "3ways", 4, flags ) )
             {
-                ImGui::TableSetupColumn( "MD5", ImGuiTableColumnFlags_NoHide, 300.f );
-                ImGui::TableSetupColumn( "Size", ImGuiTableColumnFlags_WidthFixed, 120.f );
-                ImGui::TableSetupColumn( "Mod time", ImGuiTableColumnFlags_WidthFixed, 120.f );
-                ImGui::TableSetupColumn( "Action", ImGuiTableColumnFlags_WidthFixed, 120.f );
+                ImGui::TableSetupColumn( "MD5", ImGuiTableColumnFlags_WidthFixed, 330.f );
+                ImGui::TableSetupColumn( "Size", ImGuiTableColumnFlags_WidthFixed, 60.f );
+                ImGui::TableSetupColumn( "Mod time", ImGuiTableColumnFlags_WidthFixed, 70.f );
+                ImGui::TableSetupColumn( "Action", ImGuiTableColumnFlags_WidthFixed, 110.f );
                 ImGui::TableHeadersRow();
 
-                for( const auto& group : m_fileGroups )
+                std::int8_t j{ 0 };
+                for( auto& group : m_fileGroups )
                 {
+                    if( group.Skip )
+                    {
+                        continue;
+                    }
+
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
                     bool open = ImGui::TreeNodeEx( group.MD5.cStr(), ImGuiTreeNodeFlags_SpanFullWidth );
@@ -304,20 +312,69 @@ void CApp::guiIteration()
                     const float sizeInMB = size / BytesInMegs;
 
                     ImGui::TextDisabled( "%6.1f MB", sizeInMB );
+                    ImGui::TableNextColumn();
+                    ImGui::TableNextColumn();
+                    {
+                        char pathStr[512];
+                        sprintf( pathStr, "Skip %i", j++ );
+                        if( ImGui::Button( pathStr ) )
+                        {
+                            group.Skip = true;
+                        }
+                    }
 
                     if( open )
                     {
-                        for( const auto& file : group.Files )
+                        std::vector<std::size_t> lowestValues;
+                        getEarlisestFiles( lowestValues, group.Files );
+
+                        const std::size_t filesCount = group.Files.size();
+
+                        for( std::size_t i = 0u; i < filesCount; ++i )
                         {
+                            const bool isNewest = std::find( lowestValues.begin(), lowestValues.end(), i ) != lowestValues.end();
+
+                            ImVec4 color( 0.0f, 1.0f, 0.0f, 1.0f );
+                            if( isNewest == false && lowestValues.empty() == false )
+                            {
+                                color.x = 1.f; 
+                                color.y = 1.f;
+                            }
+
+                            const FileEntry& fe = group.Files[i];
+                            const char* filePathChar = fe.Path.cStr();
+
                             ImGui::TableNextRow();
-                            ImGui::TreeNodeEx( file.Path.cStr(), ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet |
-                                                               ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth );
+                            ImGui::TreeNodeEx( filePathChar, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet |
+                                                                     ImGuiTreeNodeFlags_NoTreePushOnOpen |
+                                                                     ImGuiTreeNodeFlags_SpanFullWidth );
                             ImGui::TableNextColumn();
-                            ImGui::Text( "%s", file.Path.cStr() );
+
+
+                            ImGui::TextColored( color, "%s", filePathChar );
                             ImGui::TableNextColumn();
                             ImGui::TextUnformatted( "--" );
                             ImGui::TableNextColumn();
-                            ImGui::TextUnformatted( file.ModTime.cStr() );
+                            ImGui::TextUnformatted( fe.ModTime.cStr() );
+                            ImGui::TableNextColumn();
+
+                            char pathStr[512];
+                            {
+                                sprintf( pathStr, "Copy %i", i );
+                                if( ImGui::Button( pathStr ) )
+                                {
+                                    ImGui::SetClipboardText( filePathChar );
+                                }
+                            }
+                            ImGui::SameLine();
+                            {
+                                sprintf( pathStr, "Delete %i", i );
+                                if( ImGui::Button( pathStr ) )
+                                {
+                                    m_culInterface->getFS()->deleteFile( filePathChar );
+                                    m_fileDb.removeFileFromDB( filePathChar );
+                                }
+                            }
                         }
 
                         ImGui::TreePop();
@@ -326,8 +383,6 @@ void CApp::guiIteration()
                 ImGui::EndTable();
             }
         }
-
-
     }
 
     if( m_searchStarted )
@@ -341,6 +396,67 @@ void CApp::guiIteration()
     }
 
     ImGui::End();
+}
+
+void CApp::scanFileGroupsForDeleted()
+{
+    const CUL::Length groupsCount = m_fileGroups.size();
+    for( CUL::Length groupId = groupsCount - 1; groupId >= 0; --groupId )
+    {
+        SameFilesGroup& group = m_fileGroups[groupId];
+        CUL::Length groupSize = group.Files.size();
+        for( CUL::Length i = groupSize - 1; i >= 0; --i )
+        {
+            const CUL::FS::Path currentPath = group.Files[i].Path;
+            if( currentPath.exists() == false )
+            {
+                m_fileDb.removeFileFromDB( currentPath.getPath() );
+                group.Files.erase( group.Files.begin() + i );
+            }
+        }
+
+        groupSize = group.Files.size();
+        if( groupSize < 2 )
+        {
+            m_fileGroups.erase( m_fileGroups.begin() + groupId );
+        }
+    }
+}
+
+void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vector<FileEntry>& files )
+{
+    if( files.empty() )
+    {
+        return;
+    }
+    const std::size_t elementsCount = files.size();
+
+    if( elementsCount == 0u )
+    {
+        outValue.push_back( 0u );
+        return;
+    }
+
+    CUL::String lowest( files[0].ModTime );
+    
+    for( std::size_t i = 1u; i < elementsCount; ++i )
+    {
+        const CUL::String current = files[i].ModTime;
+        if( lowest > current )
+        {
+            outValue.clear();
+            outValue.push_back( i );
+        }
+        else if( lowest == current )
+        {
+            outValue.push_back( i );
+        }
+    }
+
+    if( outValue.empty() )
+    {
+        outValue.push_back( 0u );
+    }
 }
 
 void CApp::addSearchDir()
@@ -646,9 +762,12 @@ void CApp::fetchDuplicates()
 
     for( std::int64_t i = listOfSizesSize - 1; i >= 0; --i )
     {
-        if( m_fileGroups.size() > m_maxFileGroups )
         {
-            return;
+            std::lock_guard<std::mutex> locker( m_fileGroupsMtx );
+            if( m_fileGroups.size() > m_maxFileGroups )
+            {
+                return;
+            }
         }
 
         const auto size = listOfSizes[i];
@@ -665,6 +784,12 @@ void CApp::fetchDuplicates()
         for( const auto& md5 : md5s )
         {
             std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+
+            if( size == 28980810 && md5 == "951b7538d4c9c2e31f62ca3428970a719f733ad657beb1a0ac244a7ef410555e" )
+            {
+                auto x = 0;
+            }
+
             m_fileDb.getFiles( size, md5, duplicatesList );
             if( duplicatesList.size() < 2u )
             {
