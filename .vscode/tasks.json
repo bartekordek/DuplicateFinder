@@ -121,7 +121,7 @@
         {
             "label": "[WINDOWS][DEBUG][DuplicateFinderGUI]",
             "type": "shell",
-            "command": "cmake --build Build-Windows --target DuplicateFinderGUI --config DEBUG -j16",
+            "command": "cmake -S . -B Build-Windows -DCMAKE_BUILD_TYPE=Debug",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -136,12 +136,13 @@
                 "panel": "dedicated",
                 "showReuseMessage": true,
                 "clear": true
-            }
+            },
+            "dependsOn": "[WINDOWS][CREATE][DEBUG][DuplicateFinderGUI]"
         },
         {
-            "label": "[WINDOWS][DEBUG][DuplicateFinderGUI]",
+            "label": "[WINDOWS][CREATE][DEBUG][DuplicateFinderGUI]",
             "type": "shell",
-            "command": "cmake --build Build-Windows --target DuplicateFinderGUI --config DEBUG -j16",
+            "command": "cmake -S . -B Build-Windows -DCMAKE_BUILD_TYPE=Debug",
             "group": {
                 "kind": "build",
                 "isDefault": true

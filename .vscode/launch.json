@@ -9,7 +9,9 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Build-Linux/DuplicateFinder.bin",
-            "args": ["/mnt/d/Mega"],
+            "args": [
+                "/mnt/d/Mega"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/Build-Linux",
             "environment": [],
@@ -30,7 +32,9 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/Build-Linux/DuplicateFinder.bin",
-            "args": ["/mnt/d/Mega"],
+            "args": [
+                "/mnt/d/Mega"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/Build-Linux",
             "environment": [],
@@ -47,10 +51,10 @@
             "miDebuggerPath": "/usr/bin/gdb"
         },
         {
-            "name": "[RUN][WINDOWS][DuplicateFinderGUI]",
+            "name": "[RUN][WINDOWS][DuplicateFinderGUI_static][Debug]",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/Build-Windows/Debug/DuplicateFinderGUI.exe",
+            "program": "${workspaceFolder}/Build-Windows/Debug/DuplicateFinderGUI_static.exe",
             "cwd": "${workspaceFolder}/DuplicateFinderGUI",
             "symbolSearchPath": "${workspaceFolder}/Build-Windows/Debug/",
             "args": [
@@ -64,7 +68,28 @@
                 "moduleLoad": false,
                 "trace": true,
             },
-            "preLaunchTask": "[WINDOWS][DEBUG][DuplicateFinderGUI]"
+            //"preLaunchTask": "[WINDOWS][DEBUG][DuplicateFinderGUI]"
         },
-    ]
+        {
+            "name": "[RUN][WINDOWS][DuplicateFinderGUI][RelWithDebInfo]",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Build-Windows/RelWithDebInfo/DuplicateFinderGUI_static.exe",
+            "cwd": "${workspaceFolder}/DuplicateFinderGUI",
+            "symbolSearchPath": "${workspaceFolder}/Build-Windows/RelWithDebInfo/",
+            "args": [
+                "-w",
+                "1680",
+                "-h",
+                "900"
+            ],
+            "externalConsole": false,
+            "logging": {
+                "moduleLoad": false,
+                "trace": true,
+            },
+            //"preLaunchTask": "[WINDOWS][DEBUG][DuplicateFinderGUI]"
+        },
+    }
+]
 }

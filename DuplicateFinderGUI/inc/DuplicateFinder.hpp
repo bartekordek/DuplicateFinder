@@ -79,6 +79,8 @@ public:
 
 protected:
 private:
+    void startDBLoad();
+    void startFileSearch();
     void getList();
 
     struct FileDb
@@ -96,7 +98,7 @@ private:
     void onKeyBoardEvent( const SDL2W::KeyboardState& key ) override;
     void customFrame() override;
     void onMouseEvent( const SDL2W::MouseData& mouseData ) override;
-    void guiIteration();
+    void guiIteration(float x, float y);
     void searchOneTime();
     void searchBackground();
     std::atomic_bool m_runBackground = false;
@@ -191,7 +193,7 @@ private:
     CUL::String m_statusText;
     std::atomic_bool m_loadingDb = false;
 
-    size_t m_maxTasksInQueue = 64;
+    size_t m_maxTasksInQueue = 2;
 
     std::atomic<int> m_filesTotalCount = 0;
     std::atomic<int> m_readFilesCount = 0;
