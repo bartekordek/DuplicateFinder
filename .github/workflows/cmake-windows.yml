@@ -14,22 +14,12 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
       - name: Create Build Environment
         run: cmake -E make_directory ${{github.workspace}}//Build-Windows
-
-      - name: Prepare fetch
-        uses: LuisEnMarroquin/setup-ssh-action@v2.0.0
-        with:
-          SSHKEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      - run: ssh -T git@github.com || true
-
-      - name: Fetch dependencies - begin
-        shell: cmd
-        working-directory: ${{github.workspace}}
-        env:
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
-        run: git submodule update --recursive --init
 
       - name: Configure CMake
         # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
