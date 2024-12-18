@@ -12,6 +12,7 @@
 #include "CUL/IMPORT_sqlite3.hpp"
 #include "CUL/Filesystem/FileFactory.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
+#include "CUL/Filesystem/PathDialog.hpp"
 #include "CUL/GenericUtils/ConsoleUtilities.hpp"
 #include "CUL/GenericUtils/ScopeExit.hpp"
 #include "CUL/Threading/ThreadUtil.hpp"
@@ -24,22 +25,18 @@
 #include "CUL/STL_IMPORTS/STD_codecvt.hpp"
 #include "CUL/STL_IMPORTS/STD_future.hpp"
 
-#define NFD_NATIVE
-#include "nfd.h"
-
-#if 0 // DEBUG_THIS_FILE
+#if 0  // DEBUG_THIS_FILE
     #define DEBUG_THIS_FILE 1
-    #ifdef _MSC_VER
+    #if defined(_MSC_VER)
         #pragma optimize( "", off )
     #else
         #pragma clang optimize off
     #endif
 #endif
 
-
 CApp* CApp::s_instance = nullptr;
 
-const CUL::String WorkerStatus(int8_t workerId, const CUL::String& status)
+const CUL::String WorkerStatus( int8_t workerId, const CUL::String& status )
 {
     return "[" + CUL::String( workerId ) + "] " + status;
 }
@@ -70,7 +67,6 @@ void CApp::onInit()
     m_oglw->drawDebugInfo( true );
     m_oglw->setBackgroundColor( LOGLW::ColorE::BLUE );
 
-
     const CUL::MATH::Angle pitch( 90.f, CUL::MATH::Angle::Type::DEGREE );
 
     m_oglw->guiFrameDelegate.addDelegate(
@@ -84,9 +80,11 @@ void CApp::onInit()
     m_camera = &m_oglw->getCamera();
 
     m_oglw->setFpsLimit( 60 );
-    m_thread.setBody( [this]() {
-        timerThread();
-    } );
+    m_thread.setBody(
+        [this]()
+        {
+            timerThread();
+        } );
 
     m_thread.run();
 }
@@ -116,7 +114,7 @@ void CApp::onWindowEvent( const SDL2W::WindowEvent::Type e )
 
 void CApp::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
 {
-    if( keys.at("Q") )
+    if( keys.at( "Q" ) )
     {
         m_runTimer = false;
         close();
@@ -128,7 +126,7 @@ void CApp::timerThread()
     while( m_runTimer )
     {
         m_time += 0.01f;
-        CUL::ITimer::sleepMiliSeconds(16);
+        CUL::ITimer::sleepMiliSeconds( 16 );
     }
 }
 
@@ -136,15 +134,15 @@ void CApp::customFrame()
 {
 }
 
-#if defined(CUL_WINDOWS)
+#if defined( CUL_WINDOWS )
 std::string wstring_to_utf8( const std::wstring& str )
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
     return myconv.to_bytes( str );
 }
-#endif // #if defined(CUL_WINDOWS)
+#endif  // #if defined(CUL_WINDOWS)
 
-void CApp::guiIteration(float x, float /*y*/)
+void CApp::guiIteration( float x, float /*y*/ )
 {
     ZoneScoped;
     CUL::String name = "MAIN";
@@ -290,7 +288,7 @@ void CApp::guiIteration(float x, float /*y*/)
                                            ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
 
             std::sort( m_fileGroups.begin(), m_fileGroups.end(),
-                       []( const SameFilesGroup& g1, const SameFilesGroup& g2)
+                       []( const SameFilesGroup& g1, const SameFilesGroup& g2 )
                        {
                            return g1.Size > g2.Size;
                        } );
@@ -347,7 +345,7 @@ void CApp::guiIteration(float x, float /*y*/)
                             ImVec4 color( 0.0f, 1.0f, 0.0f, 1.0f );
                             if( isNewest == false && lowestValues.empty() == false )
                             {
-                                color.x = 1.f; 
+                                color.x = 1.f;
                                 color.y = 1.f;
                             }
 
@@ -356,10 +354,8 @@ void CApp::guiIteration(float x, float /*y*/)
 
                             ImGui::TableNextRow();
                             ImGui::TreeNodeEx( filePathChar, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet |
-                                                                     ImGuiTreeNodeFlags_NoTreePushOnOpen |
-                                                                     ImGuiTreeNodeFlags_SpanFullWidth );
+                                                                 ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth );
                             ImGui::TableNextColumn();
-
 
                             ImGui::TextColored( color, "%s", filePathChar );
                             ImGui::TableNextColumn();
@@ -449,7 +445,7 @@ void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vec
     }
 
     CUL::String lowest( files[0].ModTime );
-    
+
     for( std::size_t i = 1u; i < elementsCount; ++i )
     {
         const CUL::String current = files[i].ModTime;
@@ -472,29 +468,12 @@ void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vec
 
 void CApp::addSearchDir()
 {
-    NFD_Init();
+    const CUL::String choosenDir = CUL::FS::PathDialog::getInstance().pickFolder();
 
-    nfdchar_t* outPath = nullptr;
-    // Unused for now.
-    //nfdfilteritem_t filterItem = {};
-    nfdresult_t result = NFD_PickFolder( &outPath, nullptr );
-    if( result == NFD_OKAY )
+    if(choosenDir.empty() == false)
     {
-        CUL::String path = outPath;
-        m_searchPaths.push_back( path );
-        NFD_FreePath( outPath );
+        m_searchPaths.push_back(choosenDir);
     }
-    else if( result == NFD_CANCEL )
-    {
-    }
-    else
-    {
-    }
-
-    NFD_Quit();
-
-
-    m_logger->log( "found?" );
 }
 
 void CApp::removeDir()
@@ -504,30 +483,15 @@ void CApp::removeDir()
 
 void CApp::chooseResultFile()
 {
-    NFD_Init();
+    CUL::FS::PathDialog::Filter filter;
+    filter.Name = "*.txt";
+    filter.Spec = "*.txt";
+    const CUL::String choosenDir = CUL::FS::PathDialog::getInstance().saveDialog( filter );
 
-    nfdchar_t* outPath = nullptr;
-#if defined(CUL_WINDOWS)
-    nfdfilteritem_t filter = { L"*.txt", L"*.txt" };
-#else // #if defined(CUL_WINDOWS)
-    nfdfilteritem_t filter = { "*.txt", "*.txt" };
-#endif // #if defined(CUL_WINDOWS)
-    nfdresult_t result = NFD_SaveDialog( &outPath, &filter, 1, nullptr, nullptr );
-    if( result == NFD_OKAY )
+    if(choosenDir.empty() == false)
     {
-        m_outputFile = outPath;
-        NFD_FreePath( outPath );
+        m_outputFile = choosenDir;
     }
-    else if( result == NFD_CANCEL )
-    {
-    }
-    else
-    {
-    }
-
-    NFD_Quit();
-
-    m_logger->log( "found?" );
 }
 
 void CApp::onMouseEvent( const SDL2W::MouseData& )
@@ -549,7 +513,8 @@ void CApp::searchBackground()
 
     CUL::TaskCallback* saveTask = new CUL::TaskCallback();
     saveTask->Type = CUL::ITask::EType::Loop;
-    saveTask->Callback = [this, saveTask]( int8_t workerId ) {
+    saveTask->Callback = [this, saveTask]( int8_t workerId )
+    {
         ZoneScoped;
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Saving duplicates..." ) );
 
@@ -563,46 +528,47 @@ void CApp::searchBackground()
     };
     CUL::MultiWorkerSystem::getInstance().registerTask( saveTask );
 
-
     startWorkers();
     m_searchStarted = true;
 }
 
 void CApp::startDBLoad()
 {
-	CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
-	loadDbTask->Callback = [this](int8_t workerId) {
-		ZoneScoped;
-		CUL::ThreadUtil::getInstance().setThreadStatus(WorkerStatus(workerId, "loading data from db..."));
-		m_loadingDb = true;
-		m_fileDb.loadFilesFromDatabase();
-		m_loadingDb = false;
-		m_initialDbFilesUpdated = true;
-		CUL::ThreadUtil::getInstance().setThreadStatus(WorkerStatus(workerId, "IDLE"));
-	};
-	loadDbTask->Type = CUL::ITask::EType::DeleteAfterExecute;
-	loadDbTask->Priority = CUL::EPriority::High;
-	CUL::MultiWorkerSystem::getInstance().registerTask(loadDbTask);
+    CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
+    loadDbTask->Callback = [this]( int8_t workerId )
+    {
+        ZoneScoped;
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "loading data from db..." ) );
+        m_loadingDb = true;
+        m_fileDb.loadFilesFromDatabase();
+        m_loadingDb = false;
+        m_initialDbFilesUpdated = true;
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
+    };
+    loadDbTask->Type = CUL::ITask::EType::DeleteAfterExecute;
+    loadDbTask->Priority = CUL::EPriority::High;
+    CUL::MultiWorkerSystem::getInstance().registerTask( loadDbTask );
 }
 
 void CApp::startFileSearch()
 {
-	CUL::TaskCallback* searchTask = new CUL::TaskCallback();
-	searchTask->Type = CUL::ITask::EType::DeleteAfterExecute;
-	searchTask->Priority = CUL::EPriority::High;
-	searchTask->Callback = [this, searchTask](int8_t workerId) {
-		ZoneScoped;
-		if(m_run == true)
-		{
-			searchAllFiles();
-			CUL::ThreadUtil::getInstance().setThreadStatus(WorkerStatus(workerId, "IDLE"));
-		}
-		else
-		{
-			searchTask->Type = CUL::ITask::EType::DeleteAfterExecute;
-		}
-	};
-	CUL::MultiWorkerSystem::getInstance().registerTask(searchTask);
+    CUL::TaskCallback* searchTask = new CUL::TaskCallback();
+    searchTask->Type = CUL::ITask::EType::DeleteAfterExecute;
+    searchTask->Priority = CUL::EPriority::High;
+    searchTask->Callback = [this, searchTask]( int8_t workerId )
+    {
+        ZoneScoped;
+        if( m_run == true )
+        {
+            searchAllFiles();
+            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
+        }
+        else
+        {
+            searchTask->Type = CUL::ITask::EType::DeleteAfterExecute;
+        }
+    };
+    CUL::MultiWorkerSystem::getInstance().registerTask( searchTask );
 }
 
 void CApp::setMainStatus( const CUL::String& status )
@@ -621,21 +587,26 @@ void CApp::searchAllFiles()
     for( const auto& m_searchPath : m_searchPaths )
     {
         ZoneScoped;
-        culFF->ListAllFiles( m_searchPath, [this, currentThreadWorkerId]( const CUL::FS::Path& path ) {
-            if( !path.getIsDir() && path != m_outputFile )
+        culFF->ListAllFiles(
+            m_searchPath,
+            [this, currentThreadWorkerId]( const CUL::FS::Path& path )
             {
-                ++m_filesTotalCount;
-                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath() ) );
-                addTask( [this, path]( int8_t workerId ) {
-                    ZoneScoped;
-                    const CUL::String pathAsString = path.getPath();
-                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Adding file: " + pathAsString ) );
-                    addFile( pathAsString, workerId );
-                    ++m_readFilesCount;
-                    m_percentage = 100.f * m_readFilesCount / ( 1.f * (float)m_filesTotalCount );
-                } );
-            }
-        } );
+                if( !path.getIsDir() && path != m_outputFile )
+                {
+                    ++m_filesTotalCount;
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath() ) );
+                    addTask(
+                        [this, path]( int8_t workerId )
+                        {
+                            ZoneScoped;
+                            const CUL::String pathAsString = path.getPath();
+                            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Adding file: " + pathAsString ) );
+                            addFile( pathAsString, workerId );
+                            ++m_readFilesCount;
+                            m_percentage = 100.f * m_readFilesCount / ( 1.f * (float)m_filesTotalCount );
+                        } );
+                }
+            } );
     }
     setMainStatus( "Searching files... done." );
 }
@@ -742,7 +713,7 @@ void CApp::fetchDuplicates()
             }
 
             const auto it = std::find_if( m_fileGroups.begin(), m_fileGroups.end(),
-                                          [&md5, size]( const SameFilesGroup& current)
+                                          [&md5, size]( const SameFilesGroup& current )
                                           {
                                               return current.MD5 == md5 && current.Size.toUint64() == size;
                                           } );
@@ -792,9 +763,10 @@ void CApp::saveDuplicates()
     std::vector<std::uint64_t> listOfSizes;
     m_fileDb.getListOfSizes( listOfSizes );
     listOfSizes.erase( std::remove_if( listOfSizes.begin(), listOfSizes.end(),
-                                       [this]( uint64_t val ) {
+                                       [this]( uint64_t val )
+                                       {
                                            return val < m_minFileSizeBytes;
-                             } ),
+                                       } ),
                        listOfSizes.end() );
 
     const size_t listOfSizesSize = listOfSizes.size();
@@ -806,7 +778,7 @@ void CApp::saveDuplicates()
     float wholePercentage = 0.f;
     float currentMd5Percentage = 0.f;
 
-    for( std::int64_t i = listOfSizesSize - 1; i>=0; --i )
+    for( std::int64_t i = listOfSizesSize - 1; i >= 0; --i )
     {
         currentMd5Percentage = 0.f;
         const auto size = listOfSizes[i];
@@ -860,7 +832,8 @@ void CApp::saveDuplicates()
         }
 
         wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
-        status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +"%, md5: " + CUL::String( currentMd5Percentage ) + "%";
+        status =
+            CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) + "%, md5: " + CUL::String( currentMd5Percentage ) + "%";
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
     }
 
@@ -908,7 +881,7 @@ void CApp::setWorkersCount( uint8_t targetCount )
 void CApp::addTask( std::function<void( int8_t )> task )
 {
     ZoneScoped;
-    while( CUL::MultiWorkerSystem::getInstance().getTasksLeft(CUL::EPriority::Medium) > m_maxTasksInQueue )
+    while( CUL::MultiWorkerSystem::getInstance().getTasksLeft( CUL::EPriority::Medium ) > m_maxTasksInQueue )
     {
         CUL::ITimer::sleepMiliSeconds( 512 );
     }
@@ -925,10 +898,11 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     ZoneScoped;
     CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path ) );
 
-    CUL::GUTILS::ScopeExit se( [this, workerId]() {
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
-    } );
-
+    CUL::GUTILS::ScopeExit se(
+        [this, workerId]()
+        {
+            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
+        } );
 
     CUL::FS::Path fp = path;
     if( fp.exists() == false )
@@ -969,7 +943,8 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     }
     else
     {
-        CUL::LOG::ILogger::getInstance().logVariable( CUL::LOG::Severity::INFO, "%s has was changed in: %s, but in db is: %s", path.cStr(), currentModTime.cStr(), modTimeFromDb.cStr() );
+        CUL::LOG::ILogger::getInstance().logVariable( CUL::LOG::Severity::INFO, "%s has was changed in: %s, but in db is: %s", path.cStr(),
+                                                      currentModTime.cStr(), modTimeFromDb.cStr() );
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path ) );
         md5 = file->getMD5();
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path ) );
@@ -1006,9 +981,11 @@ CUL::String CApp::getModTimeFromDb( const CUL::String& filePath )
 void CApp::addForCheckForDeletionList( const CUL::String& inPath )
 {
     ZoneScoped;
-    const auto it =  std::find_if( m_deletionList.begin(), m_deletionList.end(), [inPath] ( const CUL::String& path ){
-        return path == inPath;
-    } );
+    const auto it = std::find_if( m_deletionList.begin(), m_deletionList.end(),
+                                  [inPath]( const CUL::String& path )
+                                  {
+                                      return path == inPath;
+                                  } );
 
     if( it == m_deletionList.end() )
     {
@@ -1047,17 +1024,16 @@ int main( int argc, char* args[] )
 
     const CUL::String winName = cu.getArgs().getArgsValVec()[0];
     const char* winNameStr = winName.cStr();
-    CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, winNameStr,
-             "Config.txt" );
+    CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, winNameStr, "Config.txt" );
     app.run();
 
     return 0;
 }
 
 #if defined( DEBUG_THIS_FILE )
-    #ifdef _MSC_VER
-        #pragma optimize( "", on )
-    #else
-        #pragma clang optimize on
-    #endif
+#ifdef _MSC_VER
+#pragma optimize( "", on )
+#else
+#pragma clang optimize on
+#endif
 #endif  // #if defined(DEBUG_THIS_FILE)

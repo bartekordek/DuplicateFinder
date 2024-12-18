@@ -1,6 +1,3 @@
 [submodule "deps/GameEngine"]
 	path = deps/GameEngine
 	url = git@github.com:bartekordek/GameEngine.git
-[submodule "deps/nativefiledialog-extended"]
-	path = deps/nativefiledialog-extended
-	url = git@github.com:btzy/nativefiledialog-extended.git
