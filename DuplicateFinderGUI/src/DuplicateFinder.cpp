@@ -9,7 +9,6 @@
 
 #include "LOGLWAdditionalDeps/ImportImgui.hpp"
 
-#include "CUL/IMPORT_sqlite3.hpp"
 #include "CUL/Filesystem/FileFactory.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/Filesystem/PathDialog.hpp"
@@ -36,9 +35,9 @@
 
 CApp* CApp::s_instance = nullptr;
 
-const CUL::String WorkerStatus( int8_t workerId, const CUL::String& status )
+const std::string WorkerStatus( int8_t workerId, const std::string& status )
 {
-    return "[" + CUL::String( workerId ) + "] " + status;
+    return "[" + std::to_string( workerId ) + "] " + status;
 }
 
 CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
@@ -65,6 +64,7 @@ void CApp::onInit()
     m_culInterface = m_oglw->getCul();
 
     m_oglw->drawDebugInfo( true );
+    m_oglw->toggleDrawDebugInfo( false );
     m_oglw->setBackgroundColor( LOGLW::ColorE::BLUE );
 
     const CUL::MATH::Angle pitch( 90.f, CUL::MATH::Angle::Type::DEGREE );
@@ -103,16 +103,16 @@ int CApp::callback( void*, int argc, char** argv, char** azColName )
     return 0;
 }
 
-void CApp::onWindowEvent( const SDL2W::WindowEvent::Type e )
+void CApp::onWindowEvent( const LOGLW::WindowEvent::Type e )
 {
-    if( e == SDL2W::WindowEvent::Type::CLOSE )
+    if( e == LOGLW::WindowEvent::Type::CLOSE )
     {
         m_runTimer = false;
         close();
     }
 }
 
-void CApp::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
+void CApp::onKeyBoardEvent( const LOGLW::KeyboardState& keys )
 {
     if( keys.at( "Q" ) )
     {
@@ -153,8 +153,8 @@ void CApp::guiIteration( float x, float /*y*/ )
 
     ImGui::SetWindowPos( { x, 0 } );
 
-    const auto targetWidht = (float)winSize.w - x;
-    const auto targetHeight = (float)winSize.h * 1.f;
+    const auto targetWidht = (float)winSize.W - x;
+    const auto targetHeight = (float)winSize.H * 1.f;
 
     ImGui::SetWindowSize( { targetWidht, targetHeight } );
 
@@ -187,7 +187,7 @@ void CApp::guiIteration( float x, float /*y*/ )
 
     ImGui::SameLine();
 
-    ImGui::TextUnformatted( m_outputFile.cStr() );
+    ImGui::TextUnformatted( m_outputFile.getPath().cStr() );
 
     if( ImGui::Button( "Add worker" ) )
     {
@@ -494,7 +494,7 @@ void CApp::chooseResultFile()
     }
 }
 
-void CApp::onMouseEvent( const SDL2W::MouseData& )
+void CApp::onMouseEvent( const LOGLW::MouseData& )
 {
 }
 
@@ -594,13 +594,15 @@ void CApp::searchAllFiles()
                 if( !path.getIsDir() && path != m_outputFile )
                 {
                     ++m_filesTotalCount;
-                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath() ) );
+                    CUL::ThreadUtil::getInstance().setThreadStatus(
+                        WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath().string() ) );
                     addTask(
                         [this, path]( int8_t workerId )
                         {
                             ZoneScoped;
                             const CUL::String pathAsString = path.getPath();
-                            CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Adding file: " + pathAsString ) );
+                            CUL::ThreadUtil::getInstance().setThreadStatus(
+                                WorkerStatus( workerId, "Adding file: " + pathAsString.string() ) );
                             addFile( pathAsString, workerId );
                             ++m_readFilesCount;
                             m_percentage = 100.f * m_readFilesCount / ( 1.f * (float)m_filesTotalCount );
@@ -669,7 +671,7 @@ void CApp::showList()
 
         status = CUL::String( "Saved duplicate: " ) +
                  CUL::String( ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) ) + "%, ";
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
     }
 }
 
@@ -820,7 +822,7 @@ void CApp::saveDuplicates()
                     wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
                     status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +
                              "%, md5:" + CUL::String( currentMd5Percentage ) + "%";
-                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
                 }
             }
         }
@@ -834,7 +836,7 @@ void CApp::saveDuplicates()
         wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
         status =
             CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) + "%, md5: " + CUL::String( currentMd5Percentage ) + "%";
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
     }
 
     delete file;
@@ -896,7 +898,7 @@ void CApp::addTask( std::function<void( int8_t )> task )
 void CApp::addFile( const CUL::String& path, int8_t workerId )
 {
     ZoneScoped;
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path ) );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path.string() ) );
 
     CUL::GUTILS::ScopeExit se(
         [this, workerId]()
@@ -920,10 +922,10 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
         return;
     }
 
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path ) );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path.string() ) );
     CUL::Time modTimeFromFS;
     file->getLastModificationTime( modTimeFromFS );
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path ) );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path.string() ) );
     auto info = m_fileDb.getFileInfo( path );
     CUL::String modTimeFromDb;
     CUL::String md5;
@@ -934,7 +936,7 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     }
     else
     {
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path.string() ) );
     }
 
     const CUL::String currentModTime = modTimeFromFS.toString();
@@ -943,15 +945,15 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     }
     else
     {
-        CUL::LOG::ILogger::getInstance().logVariable( CUL::LOG::Severity::INFO, "%s has was changed in: %s, but in db is: %s", path.cStr(),
+        CUL::LOG::ILogger::getInstance().logVariable( CUL::LOG::Severity::Info, "%s has was changed in: %s, but in db is: %s", path.cStr(),
                                                       currentModTime.cStr(), modTimeFromDb.cStr() );
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path.string() ) );
         md5 = file->getMD5();
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path.string() ) );
 
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path.string() ) );
         m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS.toString() );
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path.string() ) );
     }
 }
 
@@ -1008,7 +1010,10 @@ CApp::~CApp()
 
 int main( int argc, char* args[] )
 {
-    std::setlocale( LC_ALL, "" );              // for C and C++ where synced with stdio
+    CUL::String tmp = "044003a002f0044006f0077006e006c006f00610064002f0078007500620075006e00740075002d00320032002e00300034002e0033002d006400650073006b0074006f0070002d0061006d006400360034002e00690073006f000000";
+    tmp.deserialize();
+
+    std::setlocale( LC_ALL, nullptr );              // for C and C++ where synced with stdio
     std::locale::global( std::locale( "" ) );  // for C++
 
     CUL::GUTILS::ConsoleUtilities cu;
@@ -1018,11 +1023,11 @@ int main( int argc, char* args[] )
 
     if( width.empty() || height.empty() )
     {
-        width = "1280";
-        height = "900";
+        width = "1920";
+        height = "1080";
     }
 
-    const CUL::String winName = cu.getArgs().getArgsValVec()[0];
+    const CUL::String winName = "Duplicate finder";
     const char* winNameStr = winName.cStr();
     CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, winNameStr, "Config.txt" );
     app.run();

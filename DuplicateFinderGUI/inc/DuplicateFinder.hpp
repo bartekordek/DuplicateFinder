@@ -1,10 +1,9 @@
 #pragma once
 
 #include "gameengine/IGameEngineApp.hpp"
-
-#include "SDL2Wrapper/WindowData.hpp"
-#include "SDL2Wrapper/IWindow.hpp"
-#include "SDL2Wrapper/Input/MouseData.hpp"
+#include "gameengine/Windowing/WinData.hpp"
+#include "gameengine/Windowing/IWindow.hpp"
+#include "gameengine/Input/MouseData.hpp"
 
 #include "CUL/Filesystem/FileDatabase.hpp"
 #include "CUL/Filesystem/IFile.hpp"
@@ -93,11 +92,11 @@ private:
     void setWorkersCount( uint8_t workersCount );
 
     void onInit() override;
-    void onWindowEvent( const SDL2W::WindowEvent::Type e ) override;
+    void onWindowEvent( const LOGLW::WindowEvent::Type e ) override;
     void timerThread();
-    void onKeyBoardEvent( const SDL2W::KeyboardState& key ) override;
+    void onKeyBoardEvent( const LOGLW::KeyboardState& key ) override;
     void customFrame() override;
-    void onMouseEvent( const SDL2W::MouseData& mouseData ) override;
+    void onMouseEvent( const LOGLW::MouseData& md ) override;
     void guiIteration(float x, float y);
     void searchOneTime();
     void searchBackground();
@@ -126,15 +125,14 @@ private:
     void getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vector<FileEntry>& files );
     void scanFileGroupsForDeleted();
 
-    CUL::String m_outputFile;
+    CUL::FS::Path m_outputFile;
     std::vector<CUL::String> m_searchPaths;
 
     std::atomic<bool> m_runTimer = true;
     CUL::ThreadWrapper m_thread;
 
     LOGLW::Camera* m_camera = nullptr;
-
-    SDL2W::MouseData m_mouseData;
+    LOGLW::MouseData m_mouseData;
 
     unsigned m_indices[4];
     unsigned m_bufferId = 0;
