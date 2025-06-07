@@ -51,9 +51,9 @@
             }
         },
         {
-            "label": "[WINDOWS][CMAKE][CREATE][RELEASE]",
+            "label": "[WINDOWS][CMAKE][CREATE]",
             "type": "shell",
-            "command": "cmake -DCMAKE_BUILD_TYPE=Release .. ",
+            "command": "cmake .. ",
             "group": {
                 "kind": "build",
                 "isDefault": true
