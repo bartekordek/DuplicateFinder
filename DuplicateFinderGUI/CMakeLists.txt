@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0.0)
 
 get_filename_component( basename ${CMAKE_CURRENT_SOURCE_DIR} NAME )
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(PROJECT_NAME_DYNAMIC ${basename}_dynamic)
 set(PROJECT_NAME_STATIC ${basename}_static)
 
