@@ -7,6 +7,7 @@
 
 #include "CUL/Filesystem/FileDatabase.hpp"
 #include "CUL/Filesystem/IFile.hpp"
+#include "CUL/Filesystem/Path.hpp"
 #include "CUL/Threading/ThreadWrap.hpp"
 #include "CUL/Threading/Worker.hpp"
 #include "CUL/Math/Rotation.hpp"
@@ -112,6 +113,9 @@ private:
     glm::vec3 moveOnSphere( float yaw, float pitch, float row, float rad );
     void addSearchDir();
     void removeDir();
+    void addSkipDir();
+    void removeSkipDir();
+
     void chooseResultFile();
     void addDuplicate( const FileSize fileSize, const MD5Value& md5, const CUL::FS::Path& path );
 
@@ -127,6 +131,7 @@ private:
 
     CUL::FS::Path m_outputFile;
     std::vector<CUL::String> m_searchPaths;
+    std::vector<CUL::FS::Path> m_skippedDirs;
 
     std::atomic<bool> m_runTimer = true;
     CUL::ThreadWrapper m_thread;
@@ -191,7 +196,7 @@ private:
     CUL::String m_statusText;
     std::atomic_bool m_loadingDb = false;
 
-    size_t m_maxTasksInQueue = 2;
+    size_t m_maxTasksInQueue = 64;
 
     std::atomic<int> m_filesTotalCount = 0;
     std::atomic<int> m_readFilesCount = 0;

@@ -57,9 +57,7 @@ void CApp::onInit()
     m_continousSearch = false;
 
     m_searchPaths.push_back( CUL::String( "D:\\" ) );
-    m_searchPaths.push_back( CUL::String( "E:\\" ) );
-    m_searchPaths.push_back( CUL::String( "F:\\" ) );
-    m_searchPaths.push_back( CUL::String( "P:\\" ) );
+    m_skippedDirs.push_back( CUL::String( "D:/Music" ) );
 
     m_culInterface = m_oglw->getCul();
 
@@ -171,12 +169,14 @@ void CApp::guiIteration( float x, float /*y*/ )
         removeDir();
     }
 
-    const size_t pathsCount = m_searchPaths.size();
-    if( pathsCount > 0 )
     {
-        for( size_t i = 0; i < pathsCount; ++i )
+        const size_t pathsCount = m_searchPaths.size();
+        if( pathsCount > 0 )
         {
-            ImGui::TextUnformatted( m_searchPaths[i].cStr() );
+            for( size_t i = 0; i < pathsCount; ++i )
+            {
+                ImGui::TextUnformatted( m_searchPaths[i].cStr() );
+            }
         }
     }
 
@@ -201,6 +201,30 @@ void CApp::guiIteration( float x, float /*y*/ )
         --m_maxThreadCount;
 
         CUL::MultiWorkerSystem::getInstance().removeWorker( CUL::EPriority::Medium );
+    }
+
+    ImGui::TextUnformatted( "Dirs to Skip:" );
+    if( ImGui::Button( "Add skip dir" ) )
+    {
+        addSkipDir();
+    }
+
+    ImGui::SameLine();
+
+    if( ImGui::Button( "Remove skip dir" ) )
+    {
+        removeSkipDir();
+    }
+
+    {
+        const size_t pathsCount = m_skippedDirs.size();
+        if( pathsCount > 0 )
+        {
+            for( size_t i = 0; i < pathsCount; ++i )
+            {
+                ImGui::TextUnformatted( m_skippedDirs[i].getPath().cStr() );
+            }
+        }
     }
 
     int value = m_minFileSizeBytes;
@@ -407,6 +431,7 @@ void CApp::guiIteration( float x, float /*y*/ )
 
 void CApp::scanFileGroupsForDeleted()
 {
+    ZoneScoped;
     const CUL::Length groupsCount = m_fileGroups.size();
     for( CUL::Length groupId = groupsCount - 1; groupId >= 0; --groupId )
     {
@@ -432,6 +457,7 @@ void CApp::scanFileGroupsForDeleted()
 
 void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vector<FileEntry>& files )
 {
+    ZoneScoped;
     if( files.empty() )
     {
         return;
@@ -479,6 +505,21 @@ void CApp::addSearchDir()
 void CApp::removeDir()
 {
     m_searchPaths.pop_back();
+}
+
+void CApp::addSkipDir()
+{
+    const CUL::String choosenDir = CUL::FS::PathDialog::getInstance().pickFolder();
+
+    if( choosenDir.empty() == false )
+    {
+        m_skippedDirs.push_back( choosenDir );
+    }
+}
+
+void CApp::removeSkipDir()
+{
+    m_skippedDirs.pop_back();
 }
 
 void CApp::chooseResultFile()
@@ -534,6 +575,7 @@ void CApp::searchBackground()
 
 void CApp::startDBLoad()
 {
+    ZoneScoped;
     CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
     loadDbTask->Callback = [this]( int8_t workerId )
     {
@@ -584,13 +626,28 @@ void CApp::searchAllFiles()
     const int8_t currentThreadWorkerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
 
     auto culFF = m_culInterface->getFS();
-    for( const auto& m_searchPath : m_searchPaths )
+    for( const CUL::String& searchPath : m_searchPaths )
     {
+        const CUL::FS::Path searchPathAsPath = searchPath;
+
         ZoneScoped;
         culFF->ListAllFiles(
-            m_searchPath,
-            [this, currentThreadWorkerId]( const CUL::FS::Path& path )
+            searchPath,
+            [this, currentThreadWorkerId, searchPathAsPath]( const CUL::FS::Path& path )
             {
+                const CUL::String pathAsString = path.getPath();
+
+                const auto iterator = std::find_if( m_skippedDirs.begin(), m_skippedDirs.end(),
+                                                    [&pathAsString]( const CUL::FS::Path& inCurrent )
+                                                    {
+                                                        return inCurrent.isRootOf( pathAsString );
+                                                    } );
+
+                if( iterator != m_skippedDirs.end() )
+                {
+                    return;
+                }
+
                 if( !path.getIsDir() && path != m_outputFile )
                 {
                     ++m_filesTotalCount;
@@ -1010,9 +1067,6 @@ CApp::~CApp()
 
 int main( int argc, char* args[] )
 {
-    CUL::String tmp = "044003a002f0044006f0077006e006c006f00610064002f0078007500620075006e00740075002d00320032002e00300034002e0033002d006400650073006b0074006f0070002d0061006d006400360034002e00690073006f000000";
-    tmp.deserialize();
-
     std::setlocale( LC_ALL, nullptr );              // for C and C++ where synced with stdio
     std::locale::global( std::locale( "" ) );  // for C++
 
