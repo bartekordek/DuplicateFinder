@@ -31,7 +31,7 @@ jobs:
       run: gcc -v
 
     - name: Update gcc
-      run: sudo apt install g++ g++-9 gcc && sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 800 --slave /usr/bin/g++ g++ /usr/bin/g++-9
+      run: sudo apt install g++ g++-14 gcc-14 && sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 800 --slave /usr/bin/g++ g++ /usr/bin/g++-14
 
     - name: Install Linux prequisities
       run: sudo apt install mesa-common-dev libxi-dev libglu1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libgtk-3-0 libgtk-3-dev

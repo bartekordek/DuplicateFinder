@@ -21,5 +21,9 @@ set( DUP_FIND_RUN_DIR ${DUP_FIND_ROOT}/runDir )
 set( DUP_FIND_DEPS ${DUP_FIND_ROOT}/deps )
 
 add_subdirectory( deps/GameEngine )
-add_subdirectory( deps/wxWidgets )
-add_subdirectory( DuplicateFinderGUI )
+
+set(wxBUILD_SAMPLES ALL CACHE BOOL "WX SAMPLES" FORCE)
+add_subdirectory(deps/wxWidgets)
+add_subdirectory(DuplicateFinderBase)
+add_subdirectory(DuplicateFinderGUI)
+add_subdirectory(DuplicateFinderWxWidgets)

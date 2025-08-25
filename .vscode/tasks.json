@@ -27,33 +27,9 @@
             },
         },
         {
-            "label": "[WINDOWS][CMAKE][CREATE][DEBUG]",
-            "type": "shell",
-            "command": "cmake  -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1  .. ",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated",
-                "showReuseMessage": true,
-                "clear": true
-            },
-            "dependsOn": "[WINDOWS][CMAKE][CREATE DIR]",
-            "options": {
-                "cwd": "Build-Windows"
-            }
-        },
-        {
             "label": "[WINDOWS][CMAKE][CREATE]",
             "type": "shell",
-            "command": "cmake .. ",
+            "command": "cmake -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1  .. ",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -75,9 +51,9 @@
             }
         },
         {
-            "label": "[WINDOWS][CMAKE][CREATE][RELEASE_WITH_DEBUG_INFO]",
+            "label": "[CMAKE][CREATE][vs2022]",
             "type": "shell",
-            "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. ",
+            "command": "cmake  -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1  .. -G \"Visual Studio 17 2022\"",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -119,9 +95,19 @@
             },
         },
         {
-            "label": "[WINDOWS][DEBUG][DuplicateFinderGUI]",
+            "label": "[WINDOWS][Build][Debug][DuplicateFinderGUI]",
             "type": "shell",
-            "command": "cmake -S . -B Build-Windows -DCMAKE_BUILD_TYPE=Debug",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "Build-Windows",
+                "--config",
+                "Debug",
+                "-j16",
+                "--target",
+                "DuplicateFinderGUI_static",
+                "DuplicateFinderWxWidgets_static"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -137,32 +123,14 @@
                 "showReuseMessage": true,
                 "clear": true
             },
-            "dependsOn": "[WINDOWS][CREATE][DEBUG][DuplicateFinderGUI]"
-        },
-        {
-            "label": "[WINDOWS][CREATE][DEBUG][DuplicateFinderGUI]",
-            "type": "shell",
-            "command": "cmake -S . -B Build-Windows -DCMAKE_BUILD_TYPE=Debug",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$msCompile"
-            ],
-            "presentation": {
-                "echo": true,
-                "reveal": "always",
-                "focus": false,
-                "panel": "dedicated",
-                "showReuseMessage": true,
-                "clear": true
+            "options": {
+                "cwd": "${workspaceFolder}"
             }
         },
         {
-            "label": "[LINUX][CMAKE][CREATE][DEBUG]",
+            "label": "[LINUX][CMAKE][CREATE]",
             "type": "shell",
-            "command": "cmake .. -DCMAKE_BUILD_TYPE=Debug",
+            "command": "cmake ..",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -207,13 +175,13 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]",
+            "dependsOn": "[LINUX][CMAKE][CREATE]",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "options": {
-                "cwd": "${workspaceFolder}"
+                "cwd": "${-spaceFolder}"
             }
         },
         {
@@ -234,7 +202,7 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]",
+            "dependsOn": "[LINUX][CMAKE][CREATE]",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -262,7 +230,7 @@
                 "showReuseMessage": true,
                 "clear": true
             },
-            "dependsOn": "[WINDOWS][CMAKE][CREATE][RELEASE]"
+            "dependsOn": "[WINDOWS][CMAKE][CREATE]"
         },
     ]
 }

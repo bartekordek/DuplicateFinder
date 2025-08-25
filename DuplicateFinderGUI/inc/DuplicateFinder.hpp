@@ -4,6 +4,7 @@
 #include "gameengine/Windowing/WinData.hpp"
 #include "gameengine/Windowing/IWindow.hpp"
 #include "gameengine/Input/MouseData.hpp"
+#include <DuplicateFinderBase.hpp>
 
 #include "CUL/Filesystem/FileDatabase.hpp"
 #include "CUL/Filesystem/IFile.hpp"
@@ -122,15 +123,16 @@ private:
     void startWorkers();
     void saveDuplicates();
     void fetchDuplicates();
-    std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList );
+    std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileInfo>& fiList );
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
     void showList();
     void getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vector<FileEntry>& files );
     void scanFileGroupsForDeleted();
 
+    DuplicateFinderBase m_duplicateFinderBase;
+
     CUL::FS::Path m_outputFile;
-    std::vector<CUL::String> m_searchPaths;
     std::vector<CUL::FS::Path> m_skippedDirs;
 
     std::atomic<bool> m_runTimer = true;

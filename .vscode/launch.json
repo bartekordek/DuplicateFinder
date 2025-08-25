@@ -68,7 +68,25 @@
                 "moduleLoad": false,
                 "trace": true,
             },
-            //"preLaunchTask": "[WINDOWS][DEBUG][DuplicateFinderGUI]"
+        },
+        {
+            "name": "[RUN][WINDOWS][DuplicateFinderWxWidgets_static][Debug]",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/Build-Windows/Debug/DuplicateFinderWxWidgets_static.exe",
+            "cwd": "${workspaceFolder}/DuplicateFinderWxWidgets",
+            "symbolSearchPath": "${workspaceFolder}/Build-Windows/Debug/",
+            "args": [
+                "-w",
+                "1680",
+                "-h",
+                "900"
+            ],
+            "externalConsole": false,
+            "logging": {
+                "moduleLoad": false,
+                "trace": true,
+            },
         },
         {
             "name": "[RUN][WINDOWS][DuplicateFinderGUI][RelWithDebInfo]",

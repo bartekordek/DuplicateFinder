@@ -56,7 +56,8 @@ void CApp::onInit()
     s_instance = this;
     m_continousSearch = false;
 
-    m_searchPaths.push_back( CUL::String( "D:\\" ) );
+    m_duplicateFinderBase.addPath( "D:\\" );
+
     m_skippedDirs.push_back( CUL::String( "D:/Music" ) );
 
     m_culInterface = m_oglw->getCul();
@@ -170,12 +171,14 @@ void CApp::guiIteration( float x, float /*y*/ )
     }
 
     {
-        const size_t pathsCount = m_searchPaths.size();
+        const auto searchPaths = m_duplicateFinderBase.getPaths();
+
+        const size_t pathsCount = searchPaths.size();
         if( pathsCount > 0 )
         {
             for( size_t i = 0; i < pathsCount; ++i )
             {
-                ImGui::TextUnformatted( m_searchPaths[i].cStr() );
+                ImGui::TextUnformatted( searchPaths[i].cStr() );
             }
         }
     }
@@ -498,13 +501,13 @@ void CApp::addSearchDir()
 
     if(choosenDir.empty() == false)
     {
-        m_searchPaths.push_back(choosenDir);
+        m_duplicateFinderBase.addPath(choosenDir);
     }
 }
 
 void CApp::removeDir()
 {
-    m_searchPaths.pop_back();
+    m_duplicateFinderBase.removeLast();
 }
 
 void CApp::addSkipDir()
@@ -626,7 +629,8 @@ void CApp::searchAllFiles()
     const int8_t currentThreadWorkerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
 
     auto culFF = m_culInterface->getFS();
-    for( const CUL::String& searchPath : m_searchPaths )
+    const auto searchPaths = m_duplicateFinderBase.getPaths();
+    for( const CUL::String& searchPath : searchPaths )
     {
         const CUL::FS::Path searchPathAsPath = searchPath;
 
@@ -695,21 +699,21 @@ void CApp::showList()
             break;
         }
 
-        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        std::vector<CUL::FS::FileInfo> sameSizeFiles;
         m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.size() > 1 )
         {
             const auto md5s = getListOfMd5s( sameSizeFiles );
             for( const auto& md5 : md5s )
             {
-                std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+                std::vector<CUL::FS::FileInfo> duplicatesList;
                 m_fileDb.getFiles( size, md5, duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
                     const CUL::String current = "Size: " + CUL::String( size ) + ", MD5: " + md5;
                     if( ImGui::TreeNode( current.cStr() ) )
                     {
-                        for( const auto fileInfo : duplicatesList )
+                        for( const auto& fileInfo : duplicatesList )
                         {
                             ImGui::TextUnformatted( fileInfo.FilePath.getPath().cStr() );
                         }
@@ -752,7 +756,7 @@ void CApp::fetchDuplicates()
 
         const auto size = listOfSizes[i];
 
-        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        std::vector<CUL::FS::FileInfo> sameSizeFiles;
         m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.empty() )
         {
@@ -763,7 +767,7 @@ void CApp::fetchDuplicates()
 
         for( const auto& md5 : md5s )
         {
-            std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+            std::vector<CUL::FS::FileInfo> duplicatesList;
 
             m_fileDb.getFiles( size, md5, duplicatesList );
             if( duplicatesList.size() < 2u )
@@ -789,7 +793,7 @@ void CApp::fetchDuplicates()
             {
                 FileEntry fe;
                 fe.Path = fi.FilePath;
-                fe.ModTime = fi.ModTime;
+                fe.ModTime = fi.ModTime.toString();
 
                 sfg.Files.push_back( fe );
             }
@@ -848,7 +852,7 @@ void CApp::saveDuplicates()
             break;
         }
 
-        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        std::vector<CUL::FS::FileInfo> sameSizeFiles;
         m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.size() > 1 )
         {
@@ -858,7 +862,7 @@ void CApp::saveDuplicates()
             md5It = 0u;
             for( const auto& md5 : md5s )
             {
-                std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+                std::vector<CUL::FS::FileInfo> duplicatesList;
                 m_fileDb.getFiles( size, md5, duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
@@ -899,7 +903,7 @@ void CApp::saveDuplicates()
     delete file;
 }
 
-std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList )
+std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileInfo>& fiList )
 {
     ZoneScoped;
     std::set<CUL::String> result;
@@ -988,7 +992,7 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     CUL::String md5;
     if( info.Found )
     {
-        modTimeFromDb = info.ModTime;
+        modTimeFromDb = info.ModTime.toString();
         md5 = info.MD5;
     }
     else
