@@ -3,15 +3,20 @@
         {
             "name": "Win32",
             "includePath": [
+                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/inc",
+                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/src",
                 "${workspaceFolder}/deps/GameEngine/deps/glew-2.1.0/include",
                 "${workspaceFolder}/deps/GameEngine/deps/glfw/include",
                 "${workspaceFolder}/deps/GameEngine/deps/imgui",
-                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/inc",
-                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/src",
                 "${workspaceFolder}/deps/GameEngine/gameengine/include",
                 "${workspaceFolder}/deps/GameEngine/gameengine/src",
+                "${workspaceFolder}/deps/wxWidgets/include",
+                "${workspaceFolder}/DuplicateFinderBase/inc",
+                "${workspaceFolder}/DuplicateFinderBase/src",
                 "${workspaceFolder}/DuplicateFinderGUI/inc",
-                "${workspaceFolder}/DuplicateFinderGUI/src"
+                "${workspaceFolder}/DuplicateFinderGUI/src",
+                "${workspaceFolder}/DuplicateFinderWxWidgets/inc",
+                "${workspaceFolder}/DuplicateFinderWxWidgets/src"
             ],
             "defines": [
                 "_DEBUG",
@@ -27,15 +32,20 @@
             "includePath": [
                 "/usr/include",
                 "/usr/include/c++/9/",
+                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/inc",
+                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/src",
                 "${workspaceFolder}/deps/GameEngine/deps/glew-2.1.0/include",
                 "${workspaceFolder}/deps/GameEngine/deps/glfw/include",
                 "${workspaceFolder}/deps/GameEngine/deps/imgui",
-                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/inc",
-                "${workspaceFolder}/deps/GameEngine/deps/CUL/libcul/src",
                 "${workspaceFolder}/deps/GameEngine/gameengine/include",
                 "${workspaceFolder}/deps/GameEngine/gameengine/src",
+                "${workspaceFolder}/deps/wxWidgets/include",
+                "${workspaceFolder}/DuplicateFinderBase/inc",
+                "${workspaceFolder}/DuplicateFinderBase/src",
                 "${workspaceFolder}/DuplicateFinderGUI/inc",
-                "${workspaceFolder}/DuplicateFinderGUI/src"
+                "${workspaceFolder}/DuplicateFinderGUI/src",
+                "${workspaceFolder}/DuplicateFinderWxWidgets/inc",
+                "${workspaceFolder}/DuplicateFinderWxWidgets/src"
             ],
             "defines": [
                 "_DEBUG",
