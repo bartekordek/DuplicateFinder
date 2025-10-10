@@ -9,7 +9,6 @@
 
 #include "LOGLWAdditionalDeps/ImportImgui.hpp"
 
-#include "CUL/IMPORT_sqlite3.hpp"
 #include "CUL/Filesystem/FileFactory.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/GenericUtils/ConsoleUtilities.hpp"
@@ -39,9 +38,9 @@
 
 CApp* CApp::s_instance = nullptr;
 
-const CUL::String WorkerStatus(int8_t workerId, const CUL::String& status)
+const std::string WorkerStatus( int8_t workerId, const std::string& status )
 {
-    return "[" + CUL::String( workerId ) + "] " + status;
+    return "[" + std::to_string( workerId ) + "] " + status;
 }
 
 CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, const char* winName, const char* configPath )
@@ -73,7 +72,7 @@ void CApp::onInit()
 
     const CUL::MATH::Angle pitch( 90.f, CUL::MATH::Angle::Type::DEGREE );
 
-    m_oglw->guiFrameDelegate.addDelegate( [this](){guiIteration();} );
+    m_oglw->guiFrameDelegate.addDelegate( [this](float x, float y){guiIteration();} );
 
     m_mouseData = m_oglw->getMouseData();
 
@@ -101,16 +100,16 @@ int CApp::callback( void*, int argc, char** argv, char** azColName )
     return 0;
 }
 
-void CApp::onWindowEvent( const SDL2W::WindowEvent::Type e )
+void CApp::onWindowEvent( const LOGLW::WindowEvent::Type e )
 {
-    if( e == SDL2W::WindowEvent::Type::CLOSE )
+    if( e == LOGLW::WindowEvent::Type::CLOSE )
     {
         m_runTimer = false;
         close();
     }
 }
 
-void CApp::onKeyBoardEvent( const SDL2W::KeyboardState& keys )
+void CApp::onKeyBoardEvent( const LOGLW::KeyboardState& keys )
 {
     if( keys.at("Q") )
     {
@@ -147,12 +146,12 @@ void CApp::guiIteration()
     ImGui::Begin( name.cStr(), nullptr,
                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar );
 
-    auto winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
+    LOGLW::WinSize winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
 
-    ImGui::SetWindowPos( { (float)winSize.w * 0.2f, 0 } );
+    ImGui::SetWindowPos( { (float)winSize.W * 0.2f, 0 } );
 
-    const auto targetWidht = (float)winSize.w * 0.8f;
-    const auto targetHeight = (float)winSize.h * 1.f;
+    const auto targetWidht = (float)winSize.W * 0.8f;
+    const auto targetHeight = (float)winSize.H * 1.f;
 
     ImGui::SetWindowSize( { targetWidht, targetHeight } );
 
@@ -185,7 +184,7 @@ void CApp::guiIteration()
 
     ImGui::SameLine();
 
-    ImGui::TextUnformatted( m_outputFile.cStr() );
+    ImGui::TextUnformatted( m_outputFile.getPath().cStr() );
 
     if( ImGui::Button( "Add worker" ) )
     {
@@ -403,7 +402,7 @@ void CApp::chooseResultFile()
     m_logger->log( "found?" );
 }
 
-void CApp::onMouseEvent( const SDL2W::MouseData& )
+void CApp::onMouseEvent( const LOGLW::MouseData& )
 {
 }
 
@@ -422,7 +421,7 @@ void CApp::searchOneTime()
         culFF->ListAllFiles( path, [this] ( const CUL::FS::Path& path ){
             m_filesCount = m_filesCount + 1.f;
             addTask( [this, path] ( int8_t workerId){
-                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, path.getPath() ) );
+                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, path.getPath().cStr() ) );
                 addFile( path.getPath().string(), workerId );
                 CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
 
@@ -556,14 +555,14 @@ void CApp::searchAllFiles()
     {
         ZoneScoped;
         culFF->ListAllFiles( m_searchPath, [this, currentThreadWorkerId]( const CUL::FS::Path& path ) {
-            if( !path.getIsDir() && path != m_outputFile )
+            if( !path.getIsDir() && (path != m_outputFile ) )
             {
                 ++m_filesTotalCount;
-                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath() ) );
+                CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath().string() ) );
                 addTask( [this, path]( int8_t workerId ) {
                     ZoneScoped;
                     const CUL::String pathAsString = path.getPath();
-                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Adding file: " + pathAsString ) );
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Adding file: " + pathAsString.string() ) );
                     addFile( pathAsString, workerId );
                     ++m_readFilesCount;
                     m_percentage = 100.f * m_readFilesCount / ( 1.f * (float)m_filesTotalCount );
@@ -599,14 +598,14 @@ void CApp::showList()
             break;
         }
 
-        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        std::vector<CUL::FS::FileInfo> sameSizeFiles;
         m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.size() > 1 )
         {
             const auto md5s = getListOfMd5s( sameSizeFiles );
             for( const auto& md5 : md5s )
             {
-                std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+                std::vector<CUL::FS::FileInfo> duplicatesList;
                 m_fileDb.getFiles( size, md5, duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
@@ -632,7 +631,7 @@ void CApp::showList()
 
         status = CUL::String( "Saved duplicate: " ) +
                  CUL::String( ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) ) + "%, ";
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
     }
 }
 
@@ -653,7 +652,7 @@ void CApp::fetchDuplicates()
 
         const auto size = listOfSizes[i];
 
-        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        std::vector<CUL::FS::FileInfo> sameSizeFiles;
         m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.empty() )
         {
@@ -664,7 +663,7 @@ void CApp::fetchDuplicates()
 
         for( const auto& md5 : md5s )
         {
-            std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+            std::vector<CUL::FS::FileInfo> duplicatesList;
             m_fileDb.getFiles( size, md5, duplicatesList );
             if( duplicatesList.size() < 2u )
             {
@@ -730,7 +729,7 @@ void CApp::saveDuplicates()
             break;
         }
 
-        std::vector<CUL::FS::FileDatabase::FileInfo> sameSizeFiles;
+        std::vector<CUL::FS::FileInfo> sameSizeFiles;
         m_fileDb.getFiles( size, sameSizeFiles );
         if( sameSizeFiles.size() > 1 )
         {
@@ -740,7 +739,7 @@ void CApp::saveDuplicates()
             md5It = 0u;
             for( const auto& md5 : md5s )
             {
-                std::vector<CUL::FS::FileDatabase::FileInfo> duplicatesList;
+                std::vector<CUL::FS::FileInfo> duplicatesList;
                 m_fileDb.getFiles( size, md5, duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
@@ -761,7 +760,7 @@ void CApp::saveDuplicates()
                     wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
                     status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +
                              "%, md5:" + CUL::String( currentMd5Percentage ) + "%";
-                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
                 }
             }
         }
@@ -774,13 +773,13 @@ void CApp::saveDuplicates()
 
         wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
         status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +"%, md5: " + CUL::String( currentMd5Percentage ) + "%";
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
     }
 
     delete file;
 }
 
-std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList )
+std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileInfo>& fiList )
 {
     ZoneScoped;
     std::set<CUL::String> result;
@@ -836,7 +835,7 @@ void CApp::addTask( std::function<void( int8_t )> task )
 void CApp::addFile( const CUL::String& path, int8_t workerId )
 {
     ZoneScoped;
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path ) );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path.string() ) );
 
     CUL::GUTILS::ScopeExit se( [this, workerId]() {
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "IDLE" ) );
@@ -859,12 +858,12 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
         return;
     }
 
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path ) );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path.string() ) );
     CUL::Time modTimeFromFS;
     file->getLastModificationTime( modTimeFromFS );
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path ) );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path.string() ) );
     auto info = m_fileDb.getFileInfo( path );
-    CUL::String modTimeFromDb;
+    CUL::Time modTimeFromDb;
     CUL::String md5;
     if( info.Found )
     {
@@ -873,22 +872,22 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
     }
     else
     {
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path.string() ) );
     }
 
-    const CUL::String currentModTime = modTimeFromFS.toString();
+    const CUL::Time currentModTime = modTimeFromFS;
     if( currentModTime == modTimeFromDb )
     {
     }
     else
     {
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path.string() ) );
         md5 = file->getMD5();
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path.string() ) );
 
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path.string() ) );
         m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS.toString() );
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path.string() ) );
     }
 }
 
@@ -957,9 +956,7 @@ int main( int argc, char* args[] )
         height = "900";
     }
 
-    const CUL::String winName = cu.getArgs().getArgsValVec()[0];
-    const char* winNameStr = winName.cStr();
-    CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, winNameStr,
+    CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, "DuplicateFinder",
              "Config.txt" );
     app.run();
 

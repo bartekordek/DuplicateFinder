@@ -1,10 +1,9 @@
 #pragma once
 
 #include "gameengine/IGameEngineApp.hpp"
-
-#include "SDL2Wrapper/WindowData.hpp"
-#include "SDL2Wrapper/IWindow.hpp"
-#include "SDL2Wrapper/Input/MouseData.hpp"
+#include "gameengine/Windowing/WinData.hpp"
+#include "gameengine/Windowing/IWindow.hpp"
+#include "gameengine/Input/MouseData.hpp"
 
 #include "CUL/Filesystem/FileDatabase.hpp"
 #include "CUL/Filesystem/IFile.hpp"
@@ -49,7 +48,7 @@ struct SFileGroup
 struct FileEntry
 {
     CUL::String Path;
-    CUL::String ModTime;
+    CUL::Time ModTime;
 };
 
 struct SameFilesGroup
@@ -90,11 +89,11 @@ private:
     void setWorkersCount( uint8_t workersCount );
 
     void onInit() override;
-    void onWindowEvent( const SDL2W::WindowEvent::Type e ) override;
+    void onWindowEvent( const LOGLW::WindowEvent::Type e ) override;
     void timerThread();
-    void onKeyBoardEvent( const SDL2W::KeyboardState& key ) override;
+    void onKeyBoardEvent( const LOGLW::KeyboardState& key ) override;
     void customFrame() override;
-    void onMouseEvent( const SDL2W::MouseData& mouseData ) override;
+    void onMouseEvent( const LOGLW::MouseData& mouseData ) override;
     void guiIteration();
     void searchOneTime();
     void searchBackground();
@@ -116,12 +115,12 @@ private:
     void startWorkers();
     void saveDuplicates();
     void fetchDuplicates();
-    std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileDatabase::FileInfo>& fiList );
+    std::set<CUL::String> getListOfMd5s( const std::vector<CUL::FS::FileInfo>& fiList );
     void searchAllFiles();
     void setMainStatus( const CUL::String& status );
     void showList();
 
-    CUL::String m_outputFile;
+    CUL::FS::Path m_outputFile;
     std::vector<CUL::String> m_searchPaths;
 
     std::atomic<bool> m_runTimer = true;
@@ -129,7 +128,7 @@ private:
 
     LOGLW::Camera* m_camera = nullptr;
 
-    SDL2W::MouseData m_mouseData;
+    LOGLW::MouseData m_mouseData;
 
     unsigned m_indices[4];
     unsigned m_bufferId = 0;
