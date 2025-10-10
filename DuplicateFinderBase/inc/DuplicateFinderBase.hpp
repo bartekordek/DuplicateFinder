@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CUL/String.hpp"
+#include "CUL/GenericUtils/NonCopyable.hpp"
 #include "CUL/STL_IMPORTS/STD_vector.hpp"
 #include "CUL/STL_IMPORTS/STD_mutex.hpp"
 
