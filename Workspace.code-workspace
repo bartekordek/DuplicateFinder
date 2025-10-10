@@ -1,11 +1,11 @@
 {
-	"folders": [
-		{
-			"path": "."
-		}
-	],
-	"settings": {
-		"files.associations": {
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.associations": {
             "*.script": "lua",
             "*.config": "xml",
             "*.vert": "glsl",
@@ -118,7 +118,16 @@
             "stop_token": "cpp",
             "xmemory0": "cpp",
             "xxatomic": "cpp",
-            "cassert": "cpp"
+            "cassert": "cpp",
+            "util": "cpp",
+            "ranges": "cpp",
+            "expected": "cpp",
+            "source_location": "cpp",
+            "slist": "cpp",
+            "format": "cpp",
+            "numbers": "cpp",
+            "semaphore": "cpp",
+            "text_encoding": "cpp"
         }
-	}
+    }
 }
