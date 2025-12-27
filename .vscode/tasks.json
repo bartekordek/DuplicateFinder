@@ -27,9 +27,9 @@
             },
         },
         {
-            "label": "[WINDOWS][CMAKE][CREATE]",
+            "label": "[WINDOWS][CMAKE][CREATE][NoTracy]",
             "type": "shell",
-            "command": "cmake -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1  .. ",
+            "command": "cmake .. -DTRACY_ENABLE:BOOLEAN=OFF -DTRACY_ON_DEMAND:BOOLEAN=OFF -DTRACY_CALLSTACK:BOOLEAN=OFF",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -51,9 +51,81 @@
             }
         },
         {
-            "label": "[CMAKE][CREATE][vs2022]",
+            "label": "[WINDOWS][CMAKE][CREATE][Tracy:OnlyEvents]",
             "type": "shell",
-            "command": "cmake  -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1  .. -G \"Visual Studio 17 2022\"",
+            "command": "cmake .. -DTRACY_ENABLE:BOOLEAN=ON -DTRACY_ON_DEMAND:BOOLEAN=OFF -DTRACY_CALLSTACK:BOOLEAN=OFF -DTRACY_NO_CALLSTACK:BOOLEAN=ON",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn": "[WINDOWS][CMAKE][CREATE DIR]",
+            "options": {
+                "cwd": "Build-Windows"
+            }
+        },
+        {
+            "label": "[WINDOWS][CMAKE][CREATE][WithTracy]",
+            "type": "shell",
+            "command": "cmake  -DTRACY_ENABLE=1 -DTRACY_CALLSTACK=1 -DTRACY_ON_DEMAND=1  .. ",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn": "[WINDOWS][CMAKE][CREATE DIR]",
+            "options": {
+                "cwd": "Build-Windows"
+            }
+        },
+        {
+            "label": "[WINDOWS][CMAKE][CREATE]",
+            "type": "shell",
+            "command": "cmake .. ",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn": "[WINDOWS][CMAKE][CREATE DIR]",
+            "options": {
+                "cwd": "Build-Windows"
+            }
+        },
+        {
+            "label": "[WINDOWS][CMAKE][CREATE][RELEASE_WITH_DEBUG_INFO]",
+            "type": "shell",
+            "command": "cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .. ",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -95,19 +167,9 @@
             },
         },
         {
-            "label": "[WINDOWS][Build][Debug][DuplicateFinderGUI]",
+            "label": "[WINDOWS][DEBUG][DuplicateFinderGUI]",
             "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build",
-                "Build-Windows",
-                "--config",
-                "Debug",
-                "-j16",
-                "--target",
-                "DuplicateFinderGUI_static",
-                "DuplicateFinderWxWidgets_static"
-            ],
+            "command": "cmake -S . -B Build-Windows -DCMAKE_BUILD_TYPE=Debug",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -123,14 +185,32 @@
                 "showReuseMessage": true,
                 "clear": true
             },
-            "options": {
-                "cwd": "${workspaceFolder}"
+            "dependsOn": "[WINDOWS][CREATE][DEBUG][DuplicateFinderGUI]"
+        },
+        {
+            "label": "[WINDOWS][CREATE][DEBUG][DuplicateFinderGUI]",
+            "type": "shell",
+            "command": "cmake -S . -B Build-Windows -DCMAKE_BUILD_TYPE=Debug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
             }
         },
         {
-            "label": "[LINUX][CMAKE][CREATE]",
+            "label": "[Create][Cmake][LINUX][NoTracy]",
             "type": "shell",
-            "command": "cmake ..",
+            "command": "cmake -S . -B Build-Linux -DTRACY_ENABLE:BOOLEAN=OFF -DTRACY_ON_DEMAND:BOOLEAN=OFF -DTRACY_CALLSTACK:BOOLEAN=OFF",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -146,9 +226,8 @@
                 "showReuseMessage": true,
                 "clear": true
             },
-            "dependsOn": "[LINUX][CMAKE][CREATE DIR]",
             "options": {
-                "cwd": "${workspaceFolder}/Build-Linux"
+                "cwd": "${workspaceFolder}"
             }
         },
         {
@@ -162,7 +241,8 @@
                 "DEBUG",
                 "-j16",
                 "--target",
-                "DuplicateFinderGUI"
+                "DuplicateFinderGUI_static",
+                "-v"
             ],
             "presentation": {
                 "echo": true,
@@ -175,13 +255,13 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "dependsOn": "[LINUX][CMAKE][CREATE]",
+            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]",
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
             "options": {
-                "cwd": "${-spaceFolder}"
+                "cwd": "${workspaceFolder}"
             }
         },
         {
@@ -202,7 +282,7 @@
             "problemMatcher": [
                 "$gcc"
             ],
-            "dependsOn": "[LINUX][CMAKE][CREATE]",
+            "dependsOn": "[LINUX][CMAKE][CREATE][DEBUG]",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -210,6 +290,27 @@
             "options": {
                 "cwd": "${workspaceFolder}/Build-Linux"
             }
+        },
+        {
+            "label": "[WINDOWS][Build][DuplicateFinderGUI][Debug]",
+            "type": "shell",
+            "command": "cmake --build Build-Windows --target DuplicateFinderGUI_static --config Debug -j16",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated",
+                "showReuseMessage": true,
+                "clear": true
+            },
+            "dependsOn": "[WINDOWS][CMAKE][CREATE]"
         },
         {
             "label": "[WINDOWS][RELEASE][DuplicateFinderGUI]",
@@ -231,6 +332,5 @@
                 "clear": true
             },
             "dependsOn": "[WINDOWS][CMAKE][CREATE]"
-        },
-    ]
-}
+        }
+    }
