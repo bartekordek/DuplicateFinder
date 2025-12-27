@@ -19,6 +19,12 @@ if( MSVC )
     add_compile_options( "/wd4710" )
     add_compile_options( "/wd5045" )
 
+    add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Ot>")
+    add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Oi>")
+
+    add_compile_options("$<$<CONFIG:Release>:/Ot>")
+    add_compile_options("$<$<CONFIG:Release>:/Oi>")
+
     find_package( RapidJSON REQUIRED )
     if( RapidJSON_FOUND )
         include_directories( SYSTEM ${RapidJSON_INCLUDE_DIRS} )

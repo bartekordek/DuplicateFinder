@@ -8,9 +8,17 @@ set(PROJECT_NAME_STATIC ${basename}_static)
 project( ${PROJECT_NAME_DYNAMIC} LANGUAGES CXX)
 project( ${PROJECT_NAME_STATIC} LANGUAGES CXX)
 
+cmake_policy(SET CMP0069 NEW)
+
 if (MSVC)
     add_compile_options( /Wall )
     add_compile_options( /MP )
+
+    add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Ot>")
+    add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Oi>")
+
+    add_compile_options("$<$<CONFIG:Release>:/Ot>")
+    add_compile_options("$<$<CONFIG:Release>:/Oi>")
 else()
     add_compile_options(-Wall -Wextra -pedantic -Werror)
     add_definitions(-Wfatal-errors)
@@ -24,6 +32,15 @@ source_group( TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCES} )
 
 add_executable( ${PROJECT_NAME_DYNAMIC} ${SOURCES} )
 add_executable( ${PROJECT_NAME_STATIC} ${SOURCES} )
+
+set_property( TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG false )
+set_property( TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO false )
+set_property( TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL true )
+set_property( TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE true )
+set_property( TARGET ${PROJECT_NAME_STATIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_DEBUG false )
+set_property( TARGET ${PROJECT_NAME_STATIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO false )
+set_property( TARGET ${PROJECT_NAME_STATIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL true )
+set_property( TARGET ${PROJECT_NAME_STATIC} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE true )
 
 if (MSVC)
     set_target_properties(
