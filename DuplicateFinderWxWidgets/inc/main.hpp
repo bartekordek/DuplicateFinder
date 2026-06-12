@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IMPORT_wxwidgets.hpp"
+#include "CUL/GenericUtils/NonCopyable.hpp"
 #include "CUL/UselessMacros.hpp"
 
 class wxButton;
