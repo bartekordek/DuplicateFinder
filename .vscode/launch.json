@@ -5,22 +5,37 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "[LINUX][RUN][DEBUG][DuplicateFinder]",
+            "name": "[LINUX][RUN][DEBUG][DuplicateFinderGUI_static]",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/Build-Linux/DuplicateFinder.bin",
+            "program": "${workspaceFolder}/Build-Linux/DuplicateFinderGUI_static.bin",
             "args": [
                 "/mnt/d/Mega"
             ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/Build-Linux",
-            "environment": [],
+            "cwd": "${workspaceFolder}/DuplicateFinderGUI",
+            "environment": [
+                {
+                    "name": "ASAN_OPTIONS",
+                    "value": "abort_on_error=1"
+                }
+            ],
             "externalConsole": false,
             "MIMode": "gdb",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
                     "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Stop on SIGABRT",
+                    "text": "handle SIGABRT stop print pass",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Stop on SIGSEGV",
+                    "text": "handle SIGSEGV stop print pass",
                     "ignoreFailures": true
                 }
             ],

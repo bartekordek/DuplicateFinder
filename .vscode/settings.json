@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "*.script": "lua",
+        "*.config": "xml",
+        "*.vert": "glsl",
+        "*.frag": "glsl",
+        "*.isph": "cpp"
+    },
+    "C_Cpp.intelliSenseCachePath": "${workspaceFolder}/.vscode/intellisense",
+    "C_Cpp.intelliSenseCacheSize": 4096
+}

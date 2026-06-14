@@ -127,7 +127,8 @@
             "format": "cpp",
             "numbers": "cpp",
             "semaphore": "cpp",
-            "text_encoding": "cpp"
+            "text_encoding": "cpp",
+            "coroutine": "cpp"
         }
     }
 }

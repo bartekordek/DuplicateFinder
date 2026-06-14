@@ -7,14 +7,14 @@ DuplicateFinderBase::DuplicateFinderBase()
 }
 
 
-void DuplicateFinderBase::addPath( const CUL::String& inPath )
+void DuplicateFinderBase::addPath( const CUL::StringWr& inPath )
 {
     std::lock_guard<std::mutex> locker( m_searchPathsMtx );
     m_searchPaths.push_back(inPath);
     std::sort( m_searchPaths.begin(), m_searchPaths.end() );
 }
 
-void DuplicateFinderBase::removePath(const CUL::String& inPath)
+void DuplicateFinderBase::removePath(const CUL::StringWr& inPath)
 {
     std::lock_guard<std::mutex> locker( m_searchPathsMtx );
 

@@ -1,4 +1,4 @@
-#include "DuplicateFinder.hpp"
+﻿#include "DuplicateFinder.hpp"
 
 #include "gameengine/IGameEngine.hpp"
 #include "gameengine/Camera.hpp"
@@ -12,25 +12,26 @@
 #include "CUL/Filesystem/FileFactory.hpp"
 #include "CUL/Filesystem/FSApi.hpp"
 #include "CUL/Filesystem/PathDialog.hpp"
+#include "CUL/Filesystem/RegularFile.hpp"
 #include "CUL/GenericUtils/ConsoleUtilities.hpp"
 #include "CUL/GenericUtils/ScopeExit.hpp"
+#include "CUL/Hardware/DiskInfo.hpp"
 #include "CUL/Threading/ThreadUtil.hpp"
-#include "CUL/GenericUtils/ScopeExit.hpp"
 #include "CUL/Threading/MultiWorkerSystem.hpp"
 #include "CUL/Threading/TaskCallback.hpp"
-#include "CUL/IMPORT_tracy.hpp"
+#include "CUL/Proifling/Profiler.hpp"
 
 #include "CUL/STL_IMPORTS/STD_future.hpp"
 #include "CUL/STL_IMPORTS/STD_codecvt.hpp"
 #include "CUL/STL_IMPORTS/STD_future.hpp"
 
 #if 0  // DEBUG_THIS_FILE
-    #define DEBUG_THIS_FILE 1
-    #if defined(_MSC_VER)
-        #pragma optimize( "", off )
-    #else
-        #pragma clang optimize off
-    #endif
+#define DEBUG_THIS_FILE 1
+#if defined( _MSC_VER )
+#pragma optimize( "", off )
+#elif defined( __clang__ )
+#pragma clang optimize off
+#endif
 #endif
 
 CApp* CApp::s_instance = nullptr;
@@ -44,21 +45,29 @@ CApp::CApp( bool fullscreen, unsigned width, unsigned height, int x, int y, cons
     : LOGLW::IGameEngineApp( fullscreen, width, height, x, y, winName, configPath, false )
 {
     m_outputFile = "D:\\out.txt";
-    m_maxThreadCount = 3;
-    m_minFileSizeBytes = 512;
-    m_maxTasksInQueue = 64;
+    m_maxThreadCount = 6u;
     m_maxFileGroups = 4u;
+
+    m_timer.reset( CUL::TimerFactory::getChronoTimerPtr( nullptr ) );
 }
 
 void CApp::onInit()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::onInit" );
+
     s_instance = this;
     m_continousSearch = false;
 
-    m_duplicateFinderBase.addPath( "D:\\" );
-
-    m_skippedDirs.push_back( CUL::String( "D:/Music" ) );
+#if defined( CUL_WINDOWS )
+    // m_duplicateFinderBase.addPath( String( "C:\\" ) );
+    m_duplicateFinderBase.addPath( String( "D:\\" ) );
+    m_duplicateFinderBase.addPath( String( "E:\\" ) );
+    m_duplicateFinderBase.addPath( String( "F:\\" ) );
+#else   // #if defined(CUL_WINDOWS)
+    m_duplicateFinderBase.addPath( String( "/mnt/d/" ) );
+    m_duplicateFinderBase.addPath( String( "/mnt/e/" ) );
+    m_duplicateFinderBase.addPath( String( "/mnt/f/" ) );
+#endif  // #if defined(CUL_WINDOWS)
 
     m_culInterface = m_oglw->getCul();
 
@@ -86,17 +95,19 @@ void CApp::onInit()
         } );
 
     m_thread.run();
+    CUL::CDiskInfo::getInstance().start( true );
 }
 
-int CApp::callback( void*, int argc, char** argv, char** azColName )
+int CApp::callback( void*, int argc, char** argv, char** azColName ) const
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::callback" );
+
     m_culInterface->getLogger()->log( "\n\n---------------------------------------------------------------------------------" );
     for( int i = 0; i < argc; ++i )
     {
         char* colName = azColName[i];
-        CUL::String logVal = CUL::String( colName ) + CUL::String( " = " ) + CUL::String( argv[i] ? argv[i] : "NULL" );
-        m_culInterface->getLogger()->log( logVal );
+        String logVal = String( colName ) + String( " = " ) + String( argv[i] ? argv[i] : "NULL" );
+        m_culInterface->getLogger()->log( logVal.getUtfChar() );
     }
     m_culInterface->getLogger()->log( "---------------------------------------------------------------------------------\n\n" );
     return 0;
@@ -134,6 +145,39 @@ void CApp::customFrame()
 }
 
 #if defined( CUL_WINDOWS )
+void setClipboardText( const std::wstring& inChar )
+{
+    const wchar_t* cwdBuffer = inChar.c_str();
+
+    DWORD len = inChar.length();
+
+    // Allocate string for cwd
+    HGLOBAL hdst = GlobalAlloc( GMEM_MOVEABLE | GMEM_DDESHARE, ( len + 1 ) * sizeof( WCHAR ) );
+    LPWSTR dst = (LPWSTR)GlobalLock( hdst );
+    memcpy( dst, cwdBuffer, len * sizeof( WCHAR ) );
+    dst[len] = 0;
+    GlobalUnlock( hdst );
+
+    // Set clipboard data
+    if( !OpenClipboard( NULL ) )
+        return;
+    EmptyClipboard();
+    if( !SetClipboardData( CF_UNICODETEXT, hdst ) )
+        return;
+    CloseClipboard();
+}
+#else   // #if defined( CUL_WINDOWS )
+void setClipboardText( const std::wstring& /*inChar*/ )
+{
+}
+#endif  // #if defined( CUL_WINDOWS )
+
+void setClipboardText( const char* inChar )
+{
+    ImGui::SetClipboardText( inChar );
+}
+
+#if defined( CUL_WINDOWS )
 std::string wstring_to_utf8( const std::wstring& str )
 {
     std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
@@ -143,9 +187,10 @@ std::string wstring_to_utf8( const std::wstring& str )
 
 void CApp::guiIteration( float x, float /*y*/ )
 {
-    ZoneScoped;
-    CUL::String name = "MAIN";
-    ImGui::Begin( name.cStr(), nullptr,
+    ProfilerScope( "CApp::guiIteration" );
+
+    String name = "MAIN";
+    ImGui::Begin( name.getUtfChar(), nullptr,
                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar );
 
     auto winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
@@ -156,6 +201,12 @@ void CApp::guiIteration( float x, float /*y*/ )
     const auto targetHeight = (float)winSize.H * 1.f;
 
     ImGui::SetWindowSize( { targetWidht, targetHeight } );
+
+    const auto u8Str = u8"ĄĘó";
+    const std::string tmpStr = reinterpret_cast<const char*>( u8Str );
+    ImGui::TextUnformatted( tmpStr.c_str() );
+    ImGui::TextUnformatted( reinterpret_cast<const char*>( u8"ąęó" ) );
+    ImGui::TextUnformatted( reinterpret_cast<const char*>( u8"日本語" ) );
 
     ImGui::TextUnformatted( "Dirs to check:" );
     if( ImGui::Button( "+" ) )
@@ -171,14 +222,13 @@ void CApp::guiIteration( float x, float /*y*/ )
     }
 
     {
-        const auto searchPaths = m_duplicateFinderBase.getPaths();
-
-        const size_t pathsCount = searchPaths.size();
+        ProfilerScope( "DrawDuplicates" );
+        const size_t pathsCount = m_duplicateFinderBase.getPaths().size();
         if( pathsCount > 0 )
         {
-            for( size_t i = 0; i < pathsCount; ++i )
+            for( const String& searchPath : m_duplicateFinderBase.getPaths() )
             {
-                ImGui::TextUnformatted( searchPaths[i].cStr() );
+                ImGui::TextUnformatted( searchPath.getUtfChar() );
             }
         }
     }
@@ -190,7 +240,7 @@ void CApp::guiIteration( float x, float /*y*/ )
 
     ImGui::SameLine();
 
-    ImGui::TextUnformatted( m_outputFile.getPath().cStr() );
+    ImGui::TextUnformatted( m_outputFile.getPath().getUtfChar() );
 
     if( ImGui::Button( "Add worker" ) )
     {
@@ -204,6 +254,46 @@ void CApp::guiIteration( float x, float /*y*/ )
         --m_maxThreadCount;
 
         CUL::MultiWorkerSystem::getInstance().removeWorker( CUL::EPriority::Medium );
+    }
+
+    const std::int64_t processedFloat = m_processedFiles.load();
+    const std::int64_t foundFiles = m_foundFiles.load();
+
+    if( foundFiles != 0 )
+    {
+        m_percentage = 100.f * static_cast<float>( processedFloat ) / static_cast<float>( foundFiles );
+    }
+
+    ImGui::BeginGroup();
+
+#if defined( CUL_WINDOWS )
+    ImGui::Text( "Files:\n%8d processed\n%8d found\n%11.2f%% completed", processedFloat, foundFiles, m_percentage );
+#else   // #if defined( CUL_WINDOWS )
+    ImGui::Text( "Files:\n%8ld processed\n%8ld found\n%11.2f%% completed", processedFloat, foundFiles, m_percentage );
+#endif  // #if defined( CUL_WINDOWS )
+
+    ImGui::EndGroup();
+
+    ImGui::SameLine();
+
+    ImGui::BeginGroup();
+    const auto percentageInfo = m_fileDb.getCacheUsage();
+#if defined( CUL_WINDOWS )
+    ImGui::Text( "Cache usage: %4.2f %% (%4.2f MB) (%d/%d)", percentageInfo.Percentage * 100.f, percentageInfo.MBUsed, percentageInfo.Curr,
+                 percentageInfo.Max );
+#else   // defined( CUL_WINDOWS )
+    ImGui::Text( "Cache usage: %4.2f %% (%4.2f MB) (%ld/%ld)", percentageInfo.Percentage * 100.f, percentageInfo.MBUsed,
+                 percentageInfo.Curr, percentageInfo.Max );
+#endif  // defined( CUL_WINDOWS )
+    ImGui::EndGroup();
+
+    {
+        ProfilerScope( "DrawPrioDiskUsage" );
+        const std::vector<std::pair<std::string, float>> disksUsage = CUL::CDiskInfo::getInstance().getDisksUsage();
+        for( const std::pair<std::string, float>& currentPair : disksUsage )
+        {
+            ImGui::Text( "Disk %s usage: %3.0f%%", currentPair.first.c_str(), currentPair.second );
+        }
     }
 
     ImGui::TextUnformatted( "Dirs to Skip:" );
@@ -220,30 +310,67 @@ void CApp::guiIteration( float x, float /*y*/ )
     }
 
     {
+        ProfilerScope( "DrawSkipped" );
         const size_t pathsCount = m_skippedDirs.size();
         if( pathsCount > 0 )
         {
             for( size_t i = 0; i < pathsCount; ++i )
             {
-                ImGui::TextUnformatted( m_skippedDirs[i].getPath().cStr() );
+                ImGui::TextUnformatted( m_skippedDirs[i].getPath().getUtfChar() );
             }
         }
     }
 
-    int value = m_minFileSizeBytes;
-    if( ImGui::DragInt( "Minimum file size - bytes.", &value, 1.f, 0, 1024 * 1024 ) )
+    ImGui::TextUnformatted( "Words to exclude:" );
+
+    if( ImGui::Button( "Add exclude word" ) )
     {
-        m_minFileSizeBytes = value;
+        addExcludeWord( "Enter word" );
     }
 
-    if( ImGui::Button( "Increase minimum file size" ) )
-    {
-        m_minFileSizeBytes += 32;
-    }
     ImGui::SameLine();
-    if( ImGui::Button( "Decrease minimum file size" ) )
+
+    if( ImGui::Button( "Remove exclude word" ) )
     {
-        m_minFileSizeBytes -= 32;
+        removeLastExcludeWord();
+    }
+
+    if( ImGui::CollapsingHeader( "Skipped words" ) )
+    {
+        ProfilerScope( "DrawSkippedWords" );
+        std::size_t inputId{ 0u };
+        for( LOGLW::String& currentExcludeWord : m_excludeWords )
+        {
+            constexpr std::size_t labelBufferSize{ 128u };
+            static char labelBuffer[labelBufferSize];
+
+#if defined( CUL_WINDOWS )
+            snprintf( labelBuffer, labelBufferSize, "Word %d", inputId++ );
+#else   // #if defined( CUL_WINDOWS )
+            snprintf( labelBuffer, labelBufferSize, "Word %ld", inputId++ );
+#endif  // #if defined( CUL_WINDOWS )
+
+            constexpr std::size_t valueBufferSize{ 512u };
+            static char valueBuffer[valueBufferSize];
+            const char* wordCstr = currentExcludeWord.getUtfChar();
+            snprintf( valueBuffer, valueBufferSize, "%s", wordCstr );
+
+            if( ImGui::InputText( labelBuffer, valueBuffer, valueBufferSize ) )
+            {
+                currentExcludeWord = valueBuffer;
+            }
+        }
+    }
+
+    std::int32_t value = m_minFileSizeMB;
+    if( ImGui::DragInt( "Minimum file size - MB.", &value, 1.f, 0 ) )
+    {
+        m_minFileSizeMB = value;
+    }
+    value = m_maxFileSizeMB;
+    if( ImGui::DragInt( "Maximum file size - MB.", &value, 1.f, 0 ) )
+    {
+        m_maxFileSizeMB = value;
     }
 
     static ImGuiTableFlags flags =
@@ -251,6 +378,7 @@ void CApp::guiIteration( float x, float /*y*/ )
 
     if( ImGui::BeginTable( "split", 3, flags ) )
     {
+        ProfilerScope( "DrawMainTable" );
         ImGui::TableSetupColumn( "", ImGuiTableColumnFlags_WidthStretch, 16.f );
         constexpr float width = 270.f;
         ImGui::TableSetupColumn( "Done:", ImGuiTableColumnFlags_WidthStretch, width );
@@ -280,7 +408,7 @@ void CApp::guiIteration( float x, float /*y*/ )
             m_searchThread = std::thread( &CApp::searchBackground, this );
         }
 
-        CUL::String taskDoneAsString = CUL::String( m_filesDone );
+        const String taskDoneAsString = String::createFromPrintf( "%f", m_filesDone.load() );
         float percentage = 100.f * ( m_filesDone / m_filesCount );
         if( m_filesCount < 1.f )
         {
@@ -292,56 +420,123 @@ void CApp::guiIteration( float x, float /*y*/ )
             percentage = 100.f;
         }
 
-        const CUL::String percentageAsString = CUL::String( percentage );
-        const CUL::String logText = percentageAsString + " done. ";
+        const String percentageAsString = String::createFromPrintf( "%f", percentage );
+        const String logText = percentageAsString + " done. ";
 
         ImGui::TableSetColumnIndex( 1 );
-        ImGui::TextUnformatted( logText.cStr() );
+        ImGui::TextUnformatted( logText.getUtfChar() );
 
         ImGui::TableSetColumnIndex( 2 );
-        ImGui::TextUnformatted( m_currentFileText.cStr() );
+        ImGui::TextUnformatted( m_currentFileText.getUtfChar() );
 
         ImGui::EndTable();
     }
 
+    for( std::uint8_t currentPrio = static_cast<std::uint8_t>( CUL::EPriority::Low );
+         currentPrio < static_cast<std::uint8_t>( CUL::EPriority::COUNT ); ++currentPrio )
     {
+        ProfilerScope( "DrawPrioN" );
+        const std::uint64_t currentTasksCount =
+            CUL::MultiWorkerSystem::getInstance().getTasksLeft( static_cast<CUL::EPriority>( currentPrio ) );
+        const std::uint64_t maxTasks = CUL::MultiWorkerSystem::getInstance().getMaxTasksCount( static_cast<CUL::EPriority>( currentPrio ) );
+#if defined( CUL_WINDOWS )
+        ImGui::Text( "Prio: %s, tasks: %d/%d", CUL::EPriorityToChar( static_cast<CUL::EPriority>( currentPrio ) ), currentTasksCount,
+                     maxTasks );
+#else   // #if defined( CUL_WINDOWS )
+        ImGui::Text( "Prio: %s, tasks: %ld/%ld", CUL::EPriorityToChar( static_cast<CUL::EPriority>( currentPrio ) ), currentTasksCount,
+                     maxTasks );
+#endif  // #if defined( CUL_WINDOWS )
+    }
+
+    {
+        ProfilerScope( "m_fileGroupsMtx" );
         std::lock_guard<std::mutex> locker( m_fileGroupsMtx );
+
+        std::set<SameFilesGroup>::iterator itToBeDeleted = m_fileGroups.end();
 
         if( m_fileGroups.empty() == false )
         {
-            scanFileGroupsForDeleted();
-
+            ProfilerScope( "DrawFilesTable" );
             static ImGuiTableFlags flags = ImGuiTableFlags_BordersV | ImGuiTableFlags_BordersOuterH | ImGuiTableFlags_Resizable |
                                            ImGuiTableFlags_RowBg | ImGuiTableFlags_NoBordersInBody;
 
-            std::sort( m_fileGroups.begin(), m_fileGroups.end(),
-                       []( const SameFilesGroup& g1, const SameFilesGroup& g2 )
-                       {
-                           return g1.Size > g2.Size;
-                       } );
+            constexpr std::size_t maxGroups = 10u;
+
+            auto doesGroupContainExcluded = [this]( const SameFilesGroup& inGroup )
+            {
+                ProfilerScope( "doesGroupContainExcluded" );
+                for( const FileEntry& currentEntry : inGroup.Files )
+                {
+                    for( const auto& currentWord : m_excludeWords )
+                    {
+                        if( currentEntry.Path.contains( currentWord ) )
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            };
+
+            auto doesGroupExist = []( const SameFilesGroup& inGroup )
+            {
+                ProfilerScope( "doesGroupExist" );
+                for( const FileEntry& currentEntry : inGroup.Files )
+                {
+                    CUL::FS::FSApi* fsApi = CUL::CULInterface::getInstance()->getFS();
+                    if( fsApi->fileExist( currentEntry.Path ) == false )
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            };
 
             if( ImGui::BeginTable( "3ways", 4, flags ) )
             {
+                ProfilerScope( "DrawTable" );
+
                 ImGui::TableSetupColumn( "MD5", ImGuiTableColumnFlags_WidthFixed, 330.f );
                 ImGui::TableSetupColumn( "Size", ImGuiTableColumnFlags_WidthFixed, 60.f );
                 ImGui::TableSetupColumn( "Mod time", ImGuiTableColumnFlags_WidthFixed, 70.f );
                 ImGui::TableSetupColumn( "Action", ImGuiTableColumnFlags_WidthFixed, 110.f );
                 ImGui::TableHeadersRow();
 
-                std::int8_t j{ 0 };
-                for( auto& group : m_fileGroups )
+                std::size_t j{ 0 };
+
+                for( std::set<SameFilesGroup>::iterator it = m_fileGroups.begin(); it != m_fileGroups.end(); ++it )
                 {
+                    SameFilesGroup& group = const_cast<SameFilesGroup&>( *it );
+
                     if( group.Skip )
                     {
                         continue;
                     }
 
+                    if( doesGroupContainExcluded( group ) )
+                    {
+                        continue;
+                    }
+
+                    if( doesGroupExist( group ) == false )
+                    {
+                        continue;
+                    }
+
+                    if( j >= maxGroups )
+                    {
+                        break;
+                    }
+
                     ImGui::TableNextRow();
                     ImGui::TableNextColumn();
-                    bool open = ImGui::TreeNodeEx( group.MD5.cStr(), ImGuiTreeNodeFlags_SpanFullWidth );
+
+                    ImGui::SetNextItemOpen( true );
+
+                    bool open = ImGui::TreeNodeEx( group.MD5.getUtfChar(), ImGuiTreeNodeFlags_SpanFullWidth );
                     ImGui::TableNextColumn();
 
-                    const float size = group.Size.toFloat();
+                    const float size = static_cast<float>( group.Size );
 
                     constexpr float BytesInMegs = 1024.f * 1024.f;
                     const float sizeInMB = size / BytesInMegs;
@@ -351,11 +546,13 @@ void CApp::guiIteration( float x, float /*y*/ )
                     ImGui::TableNextColumn();
                     {
                         char pathStr[512];
-                        sprintf( pathStr, "Skip %i", j++ );
+                        sprintf( pathStr, "Skip %li", j );
                         if( ImGui::Button( pathStr ) )
                         {
                             group.Skip = true;
                         }
+
+                        ++j;
                     }
 
                     if( open )
@@ -363,11 +560,12 @@ void CApp::guiIteration( float x, float /*y*/ )
                         std::vector<std::size_t> lowestValues;
                         getEarlisestFiles( lowestValues, group.Files );
 
-                        const CUL::Length filesCount = group.Files.size();
+                        const std::int32_t filesCount = group.Files.size();
 
-                        for( CUL::Length i = filesCount - 1; i >= 0; --i )
+                        for( std::int32_t fileId = filesCount - 1; fileId >= 0; --fileId )
                         {
-                            const bool isNewest = std::find( lowestValues.begin(), lowestValues.end(), i ) != lowestValues.end();
+                            ProfilerScope( "DrawFiles - 2" );
+                            const bool isNewest = std::find( lowestValues.begin(), lowestValues.end(), fileId ) != lowestValues.end();
 
                             ImVec4 color( 0.0f, 1.0f, 0.0f, 1.0f );
                             if( isNewest == false && lowestValues.empty() == false )
@@ -376,37 +574,55 @@ void CApp::guiIteration( float x, float /*y*/ )
                                 color.y = 1.f;
                             }
 
-                            const FileEntry& fe = group.Files[i];
-                            const char* filePathChar = fe.Path.cStr();
+                            const FileEntry& fe = group.Files[fileId];
+                            const std::u8string filePathChar = fe.Path.toU8String();
+                            const char* pathValue = reinterpret_cast<const char*>( filePathChar.c_str() );
 
                             ImGui::TableNextRow();
-                            ImGui::TreeNodeEx( filePathChar, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet |
-                                                                 ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth );
+                            ImGui::TreeNodeEx( pathValue, ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_Bullet |
+                                                              ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_SpanFullWidth );
                             ImGui::TableNextColumn();
 
-                            ImGui::TextColored( color, "%s", filePathChar );
+                            ImGui::TextColored( color, "%s", pathValue );
                             ImGui::TableNextColumn();
                             ImGui::TextUnformatted( "--" );
                             ImGui::TableNextColumn();
-                            ImGui::TextUnformatted( fe.ModTime.cStr() );
+                            const String ModTimeStr = fe.ModTime.toString().getValue();
+                            ImGui::TextUnformatted( ModTimeStr.getUtfChar() );
                             ImGui::TableNextColumn();
 
                             char pathStr[512];
                             {
-                                sprintf( pathStr, "Copy %ld", i );
+                                sprintf( pathStr, "Copy %d", fileId );
                                 if( ImGui::Button( pathStr ) )
                                 {
-                                    ImGui::SetClipboardText( filePathChar );
+#if defined( CUL_WINDOWS )
+                                    setClipboardText( fe.Path.getValue() );
+#endif  // #if defined(CUL_WINDOWS)
                                 }
                             }
                             ImGui::SameLine();
                             {
-                                sprintf( pathStr, "Delete %ld", i );
+                                sprintf( pathStr, "Delete %d", fileId );
                                 if( ImGui::Button( pathStr ) )
                                 {
                                     m_culInterface->getFS()->deleteFile( fe.Path );
-                                    m_fileDb.removeFileFromDB( fe.Path );
-                                    group.Files.erase( group.Files.begin() + i );
+                                    m_fileDb.removeFileFromDB( fe.Path.getValue() );
+                                    group.Files.erase( group.Files.begin() + fileId );
+                                    if( group.Files.size() < 2 )
+                                    {
+                                        itToBeDeleted = it;
+                                    }
+                                }
+                            }
+
+                            ImGui::SameLine();
+                            {
+                                sprintf( pathStr, "Exclude %d", fileId );
+                                if( ImGui::Button( pathStr ) )
+                                {
+                                    const String pathAsString = fe.Path.getValue();
+                                    addExcludeWord( pathAsString );
                                 }
                             }
                         }
@@ -414,57 +630,40 @@ void CApp::guiIteration( float x, float /*y*/ )
                         ImGui::TreePop();
                     }
                 }
-                ImGui::EndTable();
+            }
+
+            ImGui::EndTable();
+
+            if( itToBeDeleted != m_fileGroups.end() )
+            {
+                m_fileGroups.erase( itToBeDeleted );
             }
         }
     }
 
     if( m_searchStarted )
     {
-        const auto statuses = CUL::MultiWorkerSystem::getInstance().getWorkersStatuses();
+        const std::vector<String> statuses = CUL::MultiWorkerSystem::getInstance().getWorkersStatuses();
 
-        for( const auto& status : statuses )
+        for( const String& status : statuses )
         {
-            ImGui::TextUnformatted( status.cStr() );
+            const std::u8string tmp = status.toU8String();
+            ImGui::TextUnformatted( status.getUtfChar() );
         }
     }
 
     ImGui::End();
 }
 
-void CApp::scanFileGroupsForDeleted()
-{
-    ZoneScoped;
-    const CUL::Length groupsCount = m_fileGroups.size();
-    for( CUL::Length groupId = groupsCount - 1; groupId >= 0; --groupId )
-    {
-        SameFilesGroup& group = m_fileGroups[groupId];
-        CUL::Length groupSize = group.Files.size();
-        for( CUL::Length i = groupSize - 1; i >= 0; --i )
-        {
-            const CUL::FS::Path currentPath = group.Files[i].Path;
-            if( currentPath.exists() == false )
-            {
-                m_fileDb.removeFileFromDB( currentPath.getPath() );
-                group.Files.erase( group.Files.begin() + i );
-            }
-        }
-
-        groupSize = group.Files.size();
-        if( groupSize < 2 )
-        {
-            m_fileGroups.erase( m_fileGroups.begin() + groupId );
-        }
-    }
-}
-
 void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vector<FileEntry>& files )
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::getEarlisestFiles" );
+
     if( files.empty() )
     {
         return;
     }
+
     const std::size_t elementsCount = files.size();
 
     if( elementsCount == 0u )
@@ -473,11 +672,11 @@ void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vec
         return;
     }
 
-    CUL::String lowest( files[0].ModTime );
+    CUL::Time lowest( files[0].ModTime );
 
     for( std::size_t i = 1u; i < elementsCount; ++i )
     {
-        const CUL::String current = files[i].ModTime;
+        const CUL::Time current = files[i].ModTime;
         if( lowest > current )
         {
             outValue.clear();
@@ -497,11 +696,11 @@ void CApp::getEarlisestFiles( std::vector<std::size_t>& outValue, const std::vec
 
 void CApp::addSearchDir()
 {
-    const CUL::String choosenDir = CUL::FS::PathDialog::getInstance().pickFolder();
+    const String choosenDir = CUL::FS::PathDialog::getInstance().pickFolder().getString();
 
-    if(choosenDir.empty() == false)
+    if( choosenDir.empty() == false )
     {
-        m_duplicateFinderBase.addPath(choosenDir);
+        m_duplicateFinderBase.addPath( choosenDir );
     }
 }
 
@@ -512,7 +711,7 @@ void CApp::removeDir()
 
 void CApp::addSkipDir()
 {
-    const CUL::String choosenDir = CUL::FS::PathDialog::getInstance().pickFolder();
+    const String choosenDir = CUL::FS::PathDialog::getInstance().pickFolder().getString();
 
     if( choosenDir.empty() == false )
     {
@@ -525,14 +724,24 @@ void CApp::removeSkipDir()
     m_skippedDirs.pop_back();
 }
 
+void CApp::addExcludeWord( const String& inString )
+{
+    m_excludeWords.push_back( inString );
+}
+
+void CApp::removeLastExcludeWord()
+{
+    m_excludeWords.pop_back();
+}
+
 void CApp::chooseResultFile()
 {
     CUL::FS::PathDialog::Filter filter;
     filter.Name = "*.txt";
     filter.Spec = "*.txt";
-    const CUL::String choosenDir = CUL::FS::PathDialog::getInstance().saveDialog( filter );
+    const String choosenDir = CUL::FS::PathDialog::getInstance().saveDialog( filter ).getString();
 
-    if(choosenDir.empty() == false)
+    if( choosenDir.empty() == false )
     {
         m_outputFile = choosenDir;
     }
@@ -544,23 +753,25 @@ void CApp::onMouseEvent( const LOGLW::MouseData& )
 
 void CApp::searchOneTime()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::searchOneTime" );
+
     startDBLoad();
     startFileSearch();
 }
 
 void CApp::searchBackground()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::searchBackground" );
+
     startDBLoad();
     startFileSearch();
 
     CUL::TaskCallback* saveTask = new CUL::TaskCallback();
     saveTask->Type = CUL::ITask::EType::Loop;
+    saveTask->Priority = CUL::EPriority::Low;
     saveTask->Callback = [this, saveTask]( int8_t workerId )
     {
-        ZoneScoped;
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "Saving duplicates..." ) );
+        ProfilerScope( "CApp::searchBackground::lambda" );
 
         if( m_loadingDb == false )
         {
@@ -578,11 +789,11 @@ void CApp::searchBackground()
 
 void CApp::startDBLoad()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::searchBackground::startDBLoad" );
     CUL::TaskCallback* loadDbTask = new CUL::TaskCallback();
     loadDbTask->Callback = [this]( int8_t workerId )
     {
-        ZoneScoped;
+        ProfilerScope( "CApp::searchBackground::startDBLoad::callback" );
         CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "loading data from db..." ) );
         m_loadingDb = true;
         m_fileDb.loadFilesFromDatabase();
@@ -602,7 +813,7 @@ void CApp::startFileSearch()
     searchTask->Priority = CUL::EPriority::High;
     searchTask->Callback = [this, searchTask]( int8_t workerId )
     {
-        ZoneScoped;
+        ProfilerScope( "CApp::startFileSearch::task" );
         if( m_run == true )
         {
             searchAllFiles();
@@ -616,31 +827,32 @@ void CApp::startFileSearch()
     CUL::MultiWorkerSystem::getInstance().registerTask( searchTask );
 }
 
-void CApp::setMainStatus( const CUL::String& status )
+void CApp::setMainStatus( const String& status )
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::setMainStatus" );
     std::lock_guard<std::mutex> lock( m_statusMutex );
     m_statusText = status;
 }
 
 void CApp::searchAllFiles()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::searchAllFiles" );
     const int8_t currentThreadWorkerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
 
     auto culFF = m_culInterface->getFS();
-    const auto searchPaths = m_duplicateFinderBase.getPaths();
-    for( const CUL::String& searchPath : searchPaths )
+    for( const String& searchPath : m_duplicateFinderBase.getPaths() )
     {
         const CUL::FS::Path searchPathAsPath = searchPath;
 
-        ZoneScoped;
+        ProfilerScope( "CApp::searchAllFiles::it" );
         culFF->ListAllFiles(
             searchPath,
             [this, currentThreadWorkerId, searchPathAsPath]( const CUL::FS::Path& path )
             {
-                const CUL::String pathAsString = path.getPath();
+                ProfilerScope( "CApp::searchAllFiles::it::task" );
+                ++m_foundFiles;
 
+                const String pathAsString = path.getPath();
                 const auto iterator = std::find_if( m_skippedDirs.begin(), m_skippedDirs.end(),
                                                     [&pathAsString]( const CUL::FS::Path& inCurrent )
                                                     {
@@ -649,25 +861,27 @@ void CApp::searchAllFiles()
 
                 if( iterator != m_skippedDirs.end() )
                 {
+                    ++m_processedFiles;
                     return;
                 }
 
                 if( !path.getIsDir() && path != m_outputFile )
                 {
-                    ++m_filesTotalCount;
-                    CUL::ThreadUtil::getInstance().setThreadStatus(
-                        WorkerStatus( currentThreadWorkerId, "Found: " + path.getPath().string() ) );
+                    const String workerTxt = String::createFromPrintf( "Found: %s", path.getPath().getUtfChar() );
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( currentThreadWorkerId, workerTxt.getUtfChar() ) );
                     addTask(
                         [this, path]( int8_t workerId )
                         {
-                            ZoneScoped;
-                            const CUL::String pathAsString = path.getPath();
-                            CUL::ThreadUtil::getInstance().setThreadStatus(
-                                WorkerStatus( workerId, "Adding file: " + pathAsString.string() ) );
+                            ProfilerScope( "CApp::searchAllFiles::it::add_file_task" );
+                            const String pathAsString = path.getPath();
                             addFile( pathAsString, workerId );
-                            ++m_readFilesCount;
-                            m_percentage = 100.f * m_readFilesCount / ( 1.f * (float)m_filesTotalCount );
-                        } );
+                            ++m_processedFiles;
+                        },
+                        path );
+                }
+                else
+                {
+                    ++m_processedFiles;
                 }
             } );
     }
@@ -676,7 +890,7 @@ void CApp::searchAllFiles()
 
 void CApp::showList()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::showList" );
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
     std::vector<uint64_t> listOfSizes;
     m_fileDb.getListOfSizes( listOfSizes );
@@ -684,11 +898,11 @@ void CApp::showList()
     std::int64_t md5It = 0;
     std::int64_t maxMd5s = 4;
     bool exitLoop = false;
-    CUL::String status;
+    String status;
     for( std::int64_t i = listOfSizesSize - 1; i >= 0; --i )
     {
-        const auto size = listOfSizes[i];
-        if( size < m_minFileSizeBytes )
+        const std::int32_t size = static_cast<std::int32_t>( listOfSizes[i] );
+        if( ( size < m_minFileSizeMB ) || ( size < m_maxFileSizeMB ) )
         {
             continue;
         }
@@ -707,15 +921,16 @@ void CApp::showList()
             for( const auto& md5 : md5s )
             {
                 std::vector<CUL::FS::FileInfo> duplicatesList;
-                m_fileDb.getFiles( size, md5, duplicatesList );
+                m_fileDb.getFiles( size, md5.getValue(), duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
-                    const CUL::String current = "Size: " + CUL::String( size ) + ", MD5: " + md5;
-                    if( ImGui::TreeNode( current.cStr() ) )
+                    const String current = String::createFromPrintf( "Size: %d, MD5: %s", size, md5.getUtfChar() );
+                    if( ImGui::TreeNode( current.getUtfChar() ) )
                     {
-                        for( const auto& fileInfo : duplicatesList )
+                        for( const CUL::FS::FileInfo& fileInfo : duplicatesList )
                         {
-                            ImGui::TextUnformatted( fileInfo.FilePath.getPath().cStr() );
+                            const std::string pathAsStr = fileInfo.FilePath.getSTDString();
+                            ImGui::TextUnformatted( pathAsStr.c_str() );
                         }
                         ++md5It;
 
@@ -730,105 +945,95 @@ void CApp::showList()
             }
         }
 
-        status = CUL::String( "Saved duplicate: " ) +
-                 CUL::String( ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) ) + "%, ";
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
+        status =
+            String::createFromPrintf( "Saved duplicate: %4.2f%%", ( 100.f * static_cast<float>( i ) ) / ( 1.f * (float)listOfSizesSize ) );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.getSTDString() ) );
     }
 }
 
 void CApp::fetchDuplicates()
 {
-    ZoneScoped;
-    std::vector<uint64_t> listOfSizes;
-    m_fileDb.getListOfSizes( listOfSizes );
-    const std::int64_t listOfSizesSize = static_cast<std::int64_t>( listOfSizes.size() );
-    CUL::String status;
+    ProfilerScope( "CApp::fetchDuplicates" );
 
-    for( std::int64_t i = listOfSizesSize - 1; i >= 0; --i )
+    String status;
+
+    std::vector<uint64_t> inOutListOfSizes;
+
+    m_fileDb.getListOfSizes( inOutListOfSizes );
+    // std::reverse( inOutListOfSizes.begin(), inOutListOfSizes.end() );
+
+    std::size_t i = 0u;
+    std::size_t max = inOutListOfSizes.size();
+
+    constexpr std::size_t bufferLength = 1024u;
+    char statusBuffer[bufferLength];
+
+    for( std::uint64_t currentSize : inOutListOfSizes )
     {
+        ProfilerScope( "CApp::fetchDuplicates::it" );
+        std::vector<CUL::StringWr> md5List = m_fileDb.getListOfMd5( currentSize );
+        for( const CUL::StringWr& currentMD5 : md5List )
         {
-            std::lock_guard<std::mutex> locker( m_fileGroupsMtx );
-            if( m_fileGroups.size() > m_maxFileGroups )
-            {
-                return;
-            }
-        }
-
-        const auto size = listOfSizes[i];
-
-        std::vector<CUL::FS::FileInfo> sameSizeFiles;
-        m_fileDb.getFiles( size, sameSizeFiles );
-        if( sameSizeFiles.empty() )
-        {
-            continue;
-        }
-
-        const auto md5s = getListOfMd5s( sameSizeFiles );
-
-        for( const auto& md5 : md5s )
-        {
-            std::vector<CUL::FS::FileInfo> duplicatesList;
-
-            m_fileDb.getFiles( size, md5, duplicatesList );
-            if( duplicatesList.size() < 2u )
-            {
-                continue;
-            }
-
-            const auto it = std::find_if( m_fileGroups.begin(), m_fileGroups.end(),
-                                          [&md5, size]( const SameFilesGroup& current )
-                                          {
-                                              return current.MD5 == md5 && current.Size.toUint64() == size;
-                                          } );
-
-            if( it != m_fileGroups.end() )
-            {
-                continue;
-            }
-
             SameFilesGroup sfg;
-            sfg.MD5 = md5;
-            sfg.Size = size;
-            for( const auto& fi : duplicatesList )
+            sfg.MD5 = currentMD5;
+            sfg.Size = currentSize;
+
+            std::vector<CUL::FS::FileInfo> inOutFileList;
+            m_fileDb.getFiles( currentSize, currentMD5, inOutFileList );
+            if( inOutFileList.size() > 1 )
             {
-                FileEntry fe;
-                fe.Path = fi.FilePath;
-                fe.ModTime = fi.ModTime.toString();
+                SameFilesGroup sfg;
+                sfg.MD5 = currentMD5;
+                sfg.Size = currentSize;
+                for( const CUL::FS::FileInfo& fi : inOutFileList )
+                {
+                    FileEntry fe;
+                    fe.Path = fi.FilePath.getValue();
+                    fe.ModTime = fi.ModTime;
+                    sfg.Files.push_back( fe );
+                }
 
-                sfg.Files.push_back( fe );
+                std::lock_guard<std::mutex> locker( m_fileGroupsMtx );
+                m_fileGroups.insert( sfg );
             }
-
-            std::lock_guard<std::mutex> locker( m_fileGroupsMtx );
-            m_fileGroups.push_back( sfg );
         }
-    }
+        const float percentage = 100.f * static_cast<float>( i + 1u ) / static_cast<float>( max );
 
-    std::sort( m_fileGroups.begin(), m_fileGroups.end(),
-               []( const SameFilesGroup& g1, const SameFilesGroup& g2 )
-               {
-                   return g1.Size < g2.Size;
-               } );
+        const std::uint64_t currSizeMB = currentSize / 1048576u;
+
+#if defined( CUL_WINDOWS )
+        snprintf( statusBuffer, bufferLength, "CApp::fetchDuplicates: size: %dMB %4.2f%% (%d/%d)", currSizeMB, percentage, i, max );
+#else   // #if defined( CUL_WINDOWS )
+        snprintf( statusBuffer, bufferLength, "CApp::fetchDuplicates: size: %ldMB %4.2f%% (%ld/%ld)", currSizeMB, percentage, i, max );
+#endif  // #if defined( CUL_WINDOWS )
+
+        CUL::ThreadUtil::getInstance().setThreadStatus( statusBuffer );
+        ++i;
+
+        CUL::ITimer::sleepMiliSeconds( 80u );
+    }
 }
 
 void CApp::saveDuplicates()
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::saveDuplicates" );
     const auto workerId = CUL::MultiWorkerSystem::getInstance().getCurrentThreadWorkerId();
-    CUL::String status;
+    String status;
 
     auto file = m_culInterface->getFF()->createRegularFileRawPtr( CUL::FS::Path( m_outputFile ) );
     file->toggleCache( false );
 
-    CUL::String text = CUL::String( "Files: " );
-    m_culInterface->getLogger()->log( text );
+    String text = String( "Files: " );
+    m_culInterface->getLogger()->log( text.getValue() );
     file->addLine( text );
 
     std::vector<std::uint64_t> listOfSizes;
     m_fileDb.getListOfSizes( listOfSizes );
     listOfSizes.erase( std::remove_if( listOfSizes.begin(), listOfSizes.end(),
-                                       [this]( uint64_t val )
+                                       [this]( uint64_t valB )
                                        {
-                                           return val < m_minFileSizeBytes;
+                                           const std::int32_t val = valB / 1048576u;
+                                           return ( val < m_minFileSizeMB ) || ( val < m_maxFileSizeMB );
                                        } ),
                        listOfSizes.end() );
 
@@ -863,27 +1068,26 @@ void CApp::saveDuplicates()
             for( const auto& md5 : md5s )
             {
                 std::vector<CUL::FS::FileInfo> duplicatesList;
-                m_fileDb.getFiles( size, md5, duplicatesList );
+                m_fileDb.getFiles( size, md5.getValue(), duplicatesList );
                 if( duplicatesList.size() > 1 )
                 {
                     const float MegaBytes = 1.f * static_cast<float>( size ) / ( 1.f * bytesINMegabyte );
-                    text = CUL::String( "Size: " ) + CUL::String( MegaBytes ) + CUL::String( "MB" );
+                    text = String::createFromPrintf( "Size: %4.2fMB", MegaBytes );
                     file->addLine( text );
 
-                    text = CUL::String( "MD5: " ) + md5;
+                    text = String( "MD5: " ) + md5;
                     file->addLine( text );
 
                     for( const auto& fileInfo : duplicatesList )
                     {
-                        file->addLine( fileInfo.FilePath );
+                        file->addLine( fileInfo.FilePath.getValue() );
                         save = true;
                     }
                     ++md5It;
                     currentMd5Percentage = 100.f * static_cast<float>( md5It ) / static_cast<float>( md5Count );
                     wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
-                    status = CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) +
-                             "%, md5:" + CUL::String( currentMd5Percentage ) + "%";
-                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
+                    status = String::createFromPrintf( "Saved duplicate: %4.2f%%, md5: %4.2f%%", wholePercentage, currentMd5Percentage );
+                    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.getSTDString() ) );
                 }
             }
         }
@@ -895,22 +1099,21 @@ void CApp::saveDuplicates()
         }
 
         wholePercentage = 100.f * ( listOfSizesSize - i ) / static_cast<float>( listOfSizesSize );
-        status =
-            CUL::String( "Saved duplicate: " ) + CUL::String( wholePercentage ) + "%, md5: " + CUL::String( currentMd5Percentage ) + "%";
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.string() ) );
+        status = String::createFromPrintf( "Saved duplicate: %4.2f%%, md5: %4.2f%%", wholePercentage, currentMd5Percentage );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.getSTDString() ) );
     }
 
     delete file;
 }
 
-std::set<CUL::String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileInfo>& fiList )
+std::set<String> CApp::getListOfMd5s( const std::vector<CUL::FS::FileInfo>& fiList )
 {
-    ZoneScoped;
-    std::set<CUL::String> result;
+    ProfilerScope( "CApp::getListOfMd5s" );
+    std::set<String> result;
 
     for( const auto& fi : fiList )
     {
-        result.insert( fi.MD5 );
+        result.insert( fi.MD5.getValue() );
     }
 
     return result;
@@ -922,18 +1125,18 @@ void CApp::startWorkers()
     setWorkersCount( m_maxThreadCount );
 }
 
-void CApp::setWorkersCount( uint8_t targetCount )
+void CApp::setWorkersCount( uint8_t inCount )
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::setWorkersCount" );
     uint8_t workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
-    while( workersCount != targetCount )
+    while( workersCount != inCount )
     {
-        if( workersCount < targetCount )
+        if( workersCount < inCount )
         {
             CUL::MultiWorkerSystem::getInstance().addWorker( CUL::EPriority::Medium );
             workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
         }
-        else if( workersCount > targetCount )
+        else if( workersCount > inCount )
         {
             CUL::MultiWorkerSystem::getInstance().removeWorker( CUL::EPriority::Medium );
             workersCount = CUL::MultiWorkerSystem::getInstance().getCurrentWorkersCount();
@@ -941,13 +1144,9 @@ void CApp::setWorkersCount( uint8_t targetCount )
     }
 }
 
-void CApp::addTask( std::function<void( int8_t )> task )
+void CApp::addTask( const std::function<void( int8_t )>& task, const CUL::FS::Path& /*filePath*/ ) const
 {
-    ZoneScoped;
-    while( CUL::MultiWorkerSystem::getInstance().getTasksLeft( CUL::EPriority::Medium ) > m_maxTasksInQueue )
-    {
-        CUL::ITimer::sleepMiliSeconds( 512 );
-    }
+    ProfilerScope( "CApp::addTask" );
 
     CUL::TaskCallback* taskPtr = new CUL::TaskCallback();
     taskPtr->Callback = task;
@@ -956,10 +1155,11 @@ void CApp::addTask( std::function<void( int8_t )> task )
     CUL::MultiWorkerSystem::getInstance().registerTask( taskPtr );
 }
 
-void CApp::addFile( const CUL::String& path, int8_t workerId )
+void CApp::addFile( const String& path, int8_t workerId )
 {
-    ZoneScoped;
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[START] " + path.string() ) );
+    ProfilerScope( "CApp::addFile" );
+    String status = String::createFromPrintf( "[START] %s", path.getUtfChar() );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.getUtfChar() ) );
 
     CUL::GUTILS::ScopeExit se(
         [this, workerId]()
@@ -975,50 +1175,74 @@ void CApp::addFile( const CUL::String& path, int8_t workerId )
 
     std::unique_ptr<CUL::FS::IFile> file;
     file.reset( m_culInterface->getFF()->createRegularFileRawPtr( path ) );
-    CUL::String fileSize = file->getSizeBytes();
-    const auto sizeBytes = fileSize.toUint64();
-    if( sizeBytes < m_minFileSizeBytes )
+    String fileSize = file->getSizeBytes();
+    const float fileSizeB = fileSize.toFloat();
+    const float sizeMBf = fileSizeB / ( 1048576.f );
+    const std::int32_t sizeMB = static_cast<std::int32_t>( sizeMBf );
+    const bool isLess = ( sizeMB < m_minFileSizeMB );
+    const bool isGreater = ( sizeMB > m_maxFileSizeMB );
+    if( isLess || isGreater )
     {
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File too small, aborting.]" ) );
         return;
     }
 
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get last mod time] " + path.string() ) );
+    status = String::createFromPrintf( "[Get last mod time]  %s", path.getUtfChar() );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.getSTDString() ) );
     CUL::Time modTimeFromFS;
     file->getLastModificationTime( modTimeFromFS );
-    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info] " + path.string() ) );
-    auto info = m_fileDb.getFileInfo( path );
-    CUL::String modTimeFromDb;
-    CUL::String md5;
-    if( info.Found )
+
+    status = String::createFromPrintf( "[Get DB info]  %s", path.getUtfChar() );
+    CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, status.getSTDString() ) );
+    std::optional<CUL::FS::FileInfo> info = m_fileDb.getFileInfo( path.getValue() );
+    CUL::Time modTimeFromDb;
+    String md5;
+    if( info )
     {
-        modTimeFromDb = info.ModTime.toString();
-        md5 = info.MD5;
-    }
-    else
-    {
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[Get DB info done] " + path.string() ) );
+        modTimeFromDb = info->ModTime;
+        md5 = info->MD5.getValue();
     }
 
-    const CUL::String currentModTime = modTimeFromFS.toString();
-    if( currentModTime == modTimeFromDb )
+    auto almostTheSame = []( const CUL::Time& t1, const CUL::Time& t2 )
+    {
+        if( t1 == t2 )
+        {
+            return true;
+        }
+
+        return t1.almostTheSame( t2, 3 );
+    };
+
+    // if( modTimeFromFS == modTimeFromDb )
+    if( almostTheSame( modTimeFromFS, modTimeFromDb ) )
     {
     }
     else
     {
-        CUL::LOG::ILogger::getInstance().logVariable( CUL::LOG::Severity::Info, "%s has was changed in: %s, but in db is: %s", path.cStr(),
-                                                      currentModTime.cStr(), modTimeFromDb.cStr() );
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5...] " + path.string() ) );
+        const std::string pathAsStdString = path.getSTDString();
+        CUL::LOG::ILogger::getInstance().logVariable( CUL::LOG::Severity::Info, "%s has was changed in: %s, but in db is: %s",
+                                                      pathAsStdString.c_str(), modTimeFromFS.cStr(), modTimeFromDb.cStr() );
+
+        constexpr std::size_t buffSize{ 2048u };
+        char buffer[buffSize];
+        sprintf( buffer, "[File changed, calcualte md5...] %s", pathAsStdString.c_str() );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, buffer ) );
+
         md5 = file->getMD5();
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File changed, calcualte md5 done.] " + path.string() ) );
+        sprintf( buffer, "[File changed, calcualte md5 done.] %s", pathAsStdString.c_str() );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, buffer ) );
 
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db...] " + path.string() ) );
-        m_fileDb.addFile( md5, path, CUL::String( sizeBytes ), modTimeFromFS.toString() );
-        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, "[File adding to db... done.] " + path.string() ) );
+        sprintf( buffer, "[File adding to db...] %s", pathAsStdString.c_str() );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, buffer ) );
+
+        const String fileSizeStr = String::createFromPrintf( "%d", sizeMB );
+        m_fileDb.addFile( md5.getValue(), path.getValue(), fileSizeStr.getValue(), modTimeFromFS.toString().getValue() );
+
+        sprintf( buffer, "[File adding to db... done.] %s", pathAsStdString.c_str() );
+        CUL::ThreadUtil::getInstance().setThreadStatus( WorkerStatus( workerId, buffer ) );
     }
 }
 
-void CApp::addFileToList( const CUL::String )
+void CApp::addFileToList( const String )
 {
 }
 
@@ -1026,26 +1250,28 @@ void CApp::addDuplicate( const FileSize, const MD5Value&, const CUL::FS::Path& )
 {
 }
 
-CUL::String CApp::getModTimeFromDb( const CUL::String& filePath )
+String CApp::getModTimeFromDb( const String& filePath )
 {
-    ZoneScoped;
-    auto info = m_fileDb.getFileInfo( filePath );
+    ProfilerScope( "CApp::getModTimeFromDb" );
+    std::optional<CUL::FS::FileInfo> info = m_fileDb.getFileInfo( filePath.getValue() );
 
-    if( !info.MD5.empty() )
+    if( info->MD5.empty() == false )
     {
         CUL::Time currentTime;
-        info.FilePath.getLastModificationTime( currentTime );
-        return currentTime.toString();
+        CUL::FS::Path path;
+        path.createFrom( info->FilePath );
+        path.getLastModificationTime( currentTime );
+        return currentTime.cStr();
     }
 
     return "";
 }
 
-void CApp::addForCheckForDeletionList( const CUL::String& inPath )
+void CApp::addForCheckForDeletionList( const String& inPath )
 {
-    ZoneScoped;
+    ProfilerScope( "CApp::addForCheckForDeletionList" );
     const auto it = std::find_if( m_deletionList.begin(), m_deletionList.end(),
-                                  [inPath]( const CUL::String& path )
+                                  [inPath]( const String& path )
                                   {
                                       return path == inPath;
                                   } );
@@ -1071,8 +1297,8 @@ CApp::~CApp()
 
 int main( int argc, char* args[] )
 {
-    std::setlocale( LC_ALL, nullptr );              // for C and C++ where synced with stdio
-    std::locale::global( std::locale( "" ) );  // for C++
+    std::setlocale( LC_ALL, "C" );
+    std::locale::global( std::locale::classic() );
 
     CUL::GUTILS::ConsoleUtilities cu;
     cu.setArgs( argc, args );
@@ -1085,8 +1311,8 @@ int main( int argc, char* args[] )
         height = "1080";
     }
 
-    const CUL::String winName = "Duplicate finder";
-    const char* winNameStr = winName.cStr();
+    const String winName = "Duplicate finder";
+    const char* winNameStr = winName.getUtfChar();
     CApp app( false, std::stoul( width.string() ), std::stoul( height.string() ), 256, 127, winNameStr, "Config.txt" );
     app.run();
 
@@ -1094,9 +1320,9 @@ int main( int argc, char* args[] )
 }
 
 #if defined( DEBUG_THIS_FILE )
-#ifdef _MSC_VER
+#if defined( _MSC_VER )
 #pragma optimize( "", on )
-#else
+#elif defined( __clang__ )
 #pragma clang optimize on
 #endif
 #endif  // #if defined(DEBUG_THIS_FILE)
