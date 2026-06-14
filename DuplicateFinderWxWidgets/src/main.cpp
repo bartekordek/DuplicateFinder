@@ -58,6 +58,10 @@ public:
                 button_box->Add( m_removeSearchDirectory, 0 );
                 m_removeSearchDirectory->Bind( wxEVT_BUTTON, &MyFrame::onRemoveSearchDirectory, this );
                 leftSizer->Add( button_box, 0, wxALIGN_LEFT );
+
+                m_searchDirectoriesListBox = new wxListBox( sizerLeftBox, wxID_ANY );
+                m_searchDirectoriesListBox->SetMinSize(wxSize(500, 100));
+                leftSizer->Add( m_searchDirectoriesListBox, 0, wxEXPAND | wxALL );
             }
 
             leftSizer->SetMinSize( 150, 0 );
@@ -68,7 +72,7 @@ public:
             wxStaticBoxSizer* rightSizer = new wxStaticBoxSizer( wxVERTICAL, m_mainPanel );
             mainSizer->Add( rightSizer, 1, wxEXPAND | wxALL, 10 );
 
-            m_directoryListWindow = new wxScrolledWindow( m_mainPanel, wxID_ANY );
+            m_directoryListWindow = new wxScrolledWindow( rightSizer->GetStaticBox(), wxID_ANY );
             wxBoxSizer* sizer = new wxBoxSizer( wxVERTICAL );
             for( int w = 1; w <= 120; w++ )
             {
@@ -81,6 +85,8 @@ public:
             rightSizer->Add( m_directoryListWindow, 1, wxEXPAND );
         }
         m_mainPanel->SetSizer( mainSizer );
+
+        addDir( "ddddddddddddddd" );
     }
 
     void onAddSearchDirectory( wxCommandEvent& inCommandEvent )
@@ -98,24 +104,21 @@ public:
             m_duplicateFinderBase.addPath( stringData.AsChar() );
 #endif  // CUL_USE_WCHAR
 
-            wxStaticBoxSizer* sizerLeftTop = new wxStaticBoxSizer( wxHORIZONTAL, m_searchDirectoriesListBox );
-            wxStaticBox* const sizerLeftTopBox = sizerLeftTop->GetStaticBox();
-
-            wxStaticText* dirsToCheckDir = new wxStaticText( sizerLeftTopBox, wxID_ANY, m_lastPath );
-
-            sizerLeftTop->Add( dirsToCheckDir, wxSizerFlags().Border().Expand() );
-
-            // const auto someButton = new wxButton( m_searchDirectoriesListBox, wxID_ANY, "dupa" );
+            addDir( dlg.GetPath() );
         }
+    }
 
-        // wxSizer* sizerRow = new wxBoxSizer( wxHORIZONTAL );
-        // m_rightSizer->Add( sizerRow, 0, wxALL | wxGROW, 5 );
+    void addDir( const wxString& inPath )
+    {
+        wxStaticBoxSizer* dirListSizer = new wxStaticBoxSizer( wxHORIZONTAL, m_searchDirectoriesListBox );
 
-        // wxFilePickerCtrl* fileChooser = new wxFilePickerCtrl();
-        // sizerRow->Add( fileChooser, 0 );
+        wxStaticText* dirLabel = new wxStaticText( dirListSizer->GetStaticBox(), wxID_ANY, inPath );
 
-        // m_searchDirectoriesListBox->AddChild()
-        // sizerLeftTop->Add( dirsToCheckDir, wxSizerFlags().Border().Expand() );
+        dirListSizer->Add( dirLabel, 1, wxEXPAND | wxALL, 4 );
+
+        m_searchDirectoriesListBox->GetSizer()->Add( dirListSizer, 0, wxEXPAND );
+
+        m_searchDirectoriesListBox->Layout();
     }
 
     void onRemoveSearchDirectory( wxCommandEvent& inCommandEvent )
@@ -147,7 +150,7 @@ private:
     nullptr};
     wxButton* m_addSearchDirectory{ nullptr };
     wxButton* m_removeSearchDirectory{ nullptr };
-    wxListBox* m_searchDirectoriesListBox{ nullptr };
+    wxScrolledWindow* m_searchDirectoriesListBox{ nullptr };
     wxScrolledWindow* m_directoryListWindow{nullptr};
     wxBoxSizer* m_directories_sizer{ nullptr };
     wxPanel* m_directories_panel{ nullptr };
@@ -159,6 +162,7 @@ private:
 bool MyApp::OnInit()
 {
     MyFrame* frame = new MyFrame();
+    frame->SetSize(wxSize(1200, 800));
     frame->Show();
     return true;
 }
