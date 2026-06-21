@@ -19,7 +19,7 @@
 #include "CUL/Threading/ThreadUtil.hpp"
 #include "CUL/Threading/MultiWorkerSystem.hpp"
 #include "CUL/Threading/TaskCallback.hpp"
-#include "CUL/Proifling/Profiler.hpp"
+#include "CUL/Profiling/Profiler.hpp"
 
 #include "CUL/STL_IMPORTS/STD_future.hpp"
 #include "CUL/STL_IMPORTS/STD_codecvt.hpp"
@@ -193,7 +193,7 @@ void CApp::guiIteration( float x, float /*y*/ )
     ImGui::Begin( name.getUtfChar(), nullptr,
                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar );
 
-    auto winSize = IGameEngineApp::m_sdlw->getMainWindow()->getSize();
+    auto winSize = IGameEngineApp::m_oglw->getMainWindow()->getSize();
 
     ImGui::SetWindowPos( { x, 0 } );
 
@@ -1300,7 +1300,7 @@ int main( int argc, char* args[] )
     std::setlocale( LC_ALL, "C" );
     std::locale::global( std::locale::classic() );
 
-    CUL::GUTILS::ConsoleUtilities cu;
+    auto& cu = CUL::GUTILS::ConsoleUtilities::getInstance();
     cu.setArgs( argc, args );
     auto width = cu.getFlagValue( "-w" );
     auto height = cu.getFlagValue( "-h" );

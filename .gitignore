@@ -1,5 +1,3 @@
-*.VC.db
-*.VC.db*
 *.a
 *.bin
 *.check_cache
@@ -27,10 +25,13 @@
 *.suo
 *.tlog
 *.txt
-*cache
+*.VC.db
+*.VC.db*
 *~ml
+*cache
+Build_*
 Build-*
-CMakeFiles/
 build/*
+CMakeFiles/
 intermediate
 runDir

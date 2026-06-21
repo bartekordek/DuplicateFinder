@@ -59,11 +59,11 @@ IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 set( DEPENDENCIES_STATIC
-PRIVATE cul_static PRIVATE DuplicateFinderBase PRIVATE wx::core
+PRIVATE PRIVATE DuplicateFinderBase PRIVATE wx::core
 )
 
 set( DEPENDENCIES_DYNAMIC
-PRIVATE cul_dynamic PRIVATE DuplicateFinderBase PRIVATE wx::core
+PRIVATE PRIVATE DuplicateFinderBase PRIVATE wx::core
 )
 
 if( MSVC )

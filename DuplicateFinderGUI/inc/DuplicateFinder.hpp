@@ -4,7 +4,6 @@
 #include "gameengine/Windowing/WinData.hpp"
 #include "gameengine/Windowing/IWindow.hpp"
 #include "gameengine/Input/MouseData.hpp"
-#include "gameengine/String.hpp"
 #include <DuplicateFinderBase.hpp>
 
 #include "CUL/Filesystem/FileDatabase.hpp"
