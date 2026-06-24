@@ -33,5 +33,6 @@ Build_*
 Build-*
 build/*
 CMakeFiles/
+imgui.ini
 intermediate
 runDir
