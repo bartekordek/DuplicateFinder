@@ -94,7 +94,35 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "dependsOn": "[CMake][Create]",
+            "dependsOn": "[CMake][Create]"
+        },
+        {
+            "label": "[CMake][Build][WholeRepo]",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "Build_${input:platform}",
+                "--config",
+                "${input:configuration}",
+                "-j16"
+            ],
+            "group": {
+                "kind": "build",
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "revealProblems": "onProblem",
+                "focus": true,
+                "panel": "dedicated",
+                "showReuseMessage": false,
+                "clear": true
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": "[CMake][Create]"
         }
     ]
 }
