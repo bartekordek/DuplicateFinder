@@ -1,5 +1,6 @@
 #include "main.hpp"
 #include <DuplicateFinderBase.hpp>
+#include "CUL/STL_IMPORTS/STD_optional.hpp"
 
 enum
 {
@@ -40,53 +41,7 @@ public:
 
         wxSizer* mainSizer = new wxBoxSizer( wxHORIZONTAL );
 
-        //
-        // LEFT PANEL
-        //
-        {
-            wxStaticBoxSizer* leftSizer = new wxStaticBoxSizer( wxVERTICAL, m_mainPanel );
-
-            wxStaticBox* sizerLeftBox = leftSizer->GetStaticBox();
-
-            leftSizer->Add( new wxStaticText( sizerLeftBox, wxID_ANY, "Dirs to check:" ), 0, wxALIGN_LEFT );
-
-            {
-                wxBoxSizer* buttonBox = new wxBoxSizer( wxHORIZONTAL );
-
-                m_addSearchDirectory = new wxButton( sizerLeftBox, wxID_ANY, "+" );
-
-                buttonBox->Add( m_addSearchDirectory, 0 );
-
-                m_addSearchDirectory->Bind( wxEVT_BUTTON, &MyFrame::onAddSearchDirectory, this );
-
-                m_removeSearchDirectory = new wxButton( sizerLeftBox, wxID_ANY, "-" );
-
-                buttonBox->Add( m_removeSearchDirectory, 0 );
-
-                m_removeSearchDirectory->Bind( wxEVT_BUTTON, &MyFrame::onRemoveSearchDirectory, this );
-
-                leftSizer->Add( buttonBox, 0, wxALIGN_LEFT );
-
-                //
-                // CUSTOM DIRECTORY LIST
-                //
-                m_searchDirectoriesListBox = new wxScrolledWindow( sizerLeftBox, wxID_ANY );
-
-                m_searchDirectoriesListBox->SetMinSize( wxSize( 500, 100 ) );
-
-                m_directoriesSizer = new wxBoxSizer( wxVERTICAL );
-
-                m_searchDirectoriesListBox->SetSizer( m_directoriesSizer );
-
-                m_searchDirectoriesListBox->SetScrollRate( 5, 5 );
-
-                leftSizer->Add( m_searchDirectoriesListBox, 1, wxEXPAND | wxALL );
-            }
-
-            leftSizer->SetMinSize( 150, 0 );
-
-            mainSizer->Add( leftSizer, 0, wxGROW | ( wxALL & ~wxLEFT ), 10 );
-        }
+        leftSize( mainSizer );
 
         //
         // RIGHT PANEL
@@ -116,47 +71,99 @@ public:
 
         m_mainPanel->SetSizer( mainSizer );
 
-        addDir( "ddddddddddddddd" );
+        addDir( wxString("D:\\") );
+    }
+
+    void leftSize( wxSizer* inMainSizer )
+    {
+        wxStaticBoxSizer* leftSizer = new wxStaticBoxSizer( wxVERTICAL, m_mainPanel );
+
+        wxStaticBox* sizerLeftBox = leftSizer->GetStaticBox();
+
+        leftSizer->Add( new wxStaticText( sizerLeftBox, wxID_ANY, "Dirs to check:" ), 0, wxALIGN_LEFT );
+
+        {
+            wxBoxSizer* buttonBox = new wxBoxSizer( wxHORIZONTAL );
+
+            m_addSearchDirectory = new wxButton( sizerLeftBox, wxID_ANY, "+" );
+
+            buttonBox->Add( m_addSearchDirectory, 0 );
+
+            m_addSearchDirectory->Bind( wxEVT_BUTTON, &MyFrame::onAddSearchDirectory, this );
+
+            m_removeSearchDirectory = new wxButton( sizerLeftBox, wxID_ANY, "-" );
+
+            buttonBox->Add( m_removeSearchDirectory, 0 );
+
+            m_removeSearchDirectory->Bind( wxEVT_BUTTON, &MyFrame::onRemoveSearchDirectory, this );
+
+            leftSizer->Add( buttonBox, 0, wxALIGN_LEFT );
+
+            //
+            // CUSTOM DIRECTORY LIST
+            //
+            m_searchDirectoriesListBox = new wxScrolledWindow( sizerLeftBox, wxID_ANY );
+
+            m_searchDirectoriesListBox->SetMinSize( wxSize( 500, 100 ) );
+
+            m_directoriesSizer = new wxBoxSizer( wxVERTICAL );
+
+            m_searchDirectoriesListBox->SetSizer( m_directoriesSizer );
+
+            m_searchDirectoriesListBox->SetScrollRate( 5, 5 );
+
+            leftSizer->Add( m_searchDirectoriesListBox, 1, wxEXPAND | wxALL );
+        }
+
+        leftSizer->SetMinSize( 150, 0 );
+
+        inMainSizer->Add( leftSizer, 0, wxGROW | ( wxALL & ~wxLEFT ), 10 );
     }
 
     void onAddSearchDirectory( wxCommandEvent& )
     {
-        constexpr int style = wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST;
-
-        wxDirDialog dlg( this, "Choose Directory", wxEmptyString, style );
-
-        if( dlg.ShowModal() != wxID_OK )
+        if( auto result = openDirectory() )
         {
-            return;
+            m_lastPath = *result;
+            addDir( m_lastPath );
         }
-
-        m_lastPath = dlg.GetPath();
-
-        const wxCStrData stringData = m_lastPath.c_str();
-
-#if CUL_USE_WCHAR
-        m_duplicateFinderBase.addPath( stringData.AsWChar() );
-#else
-        m_duplicateFinderBase.addPath( stringData.AsChar() );
-#endif
-
-        addDir( m_lastPath );
+        
     }
 
     void addDir( const wxString& inPath )
     {
-        wxStaticBoxSizer* dirListSizer = new wxStaticBoxSizer( wxHORIZONTAL, m_searchDirectoriesListBox );
+        wxPanel* row = new wxPanel( m_searchDirectoriesListBox, wxID_ANY );
 
-        wxButton* browseBtn = new wxButton( dirListSizer->GetStaticBox(), wxID_ANY, "" );
+        wxBoxSizer* rowSizer = new wxBoxSizer( wxHORIZONTAL );
+
+        wxButton* browseBtn = new wxButton( row, wxID_ANY, "" );
         browseBtn->SetBitmap( wxArtProvider::GetBitmap( wxART_FOLDER_OPEN, wxART_BUTTON ) );
-        wxButton* deleteBtn = new wxButton( dirListSizer->GetStaticBox(), wxID_ANY, "" );
-        deleteBtn->SetBitmap( wxArtProvider::GetBitmap( wxART_DELETE, wxART_BUTTON ) );
-        wxStaticText* dirLabel = new wxStaticText( dirListSizer->GetStaticBox(), wxID_ANY, inPath );
 
-        dirListSizer->Add( browseBtn, 0, wxSHRINK | wxALL, 4 );
-        dirListSizer->Add( deleteBtn, 0, wxSHRINK | wxALL, 4 );
-        dirListSizer->Add( dirLabel, 0, wxEXPAND | wxALL, 4 );
-        m_directoriesSizer->Add( dirListSizer, 0, wxEXPAND );
+        wxButton* deleteBtn = new wxButton( row, wxID_ANY, "" );
+        deleteBtn->SetBitmap( wxArtProvider::GetBitmap( wxART_DELETE, wxART_BUTTON ) );
+
+        wxStaticText* dirLabel = new wxStaticText( row, wxID_ANY, inPath );
+
+        rowSizer->Add( browseBtn, 0, wxALL, 4 );
+        rowSizer->Add( deleteBtn, 0, wxALL, 4 );
+        rowSizer->Add( dirLabel, 1, wxALIGN_CENTER_VERTICAL | wxALL, 4 );
+
+        row->SetSizer( rowSizer );
+
+        m_directoriesSizer->Add( row, 0, wxEXPAND );
+
+        m_searchDirectoriesListBox->Layout();
+        m_searchDirectoriesListBox->FitInside();
+
+        browseBtn->Bind( wxEVT_BUTTON,
+                         [this, dirLabel]( wxCommandEvent& )
+                         {
+                             if( auto result = openDirectory() )
+                             {
+                                 m_lastPath = *result;
+                                 dirLabel->SetLabel( m_lastPath );
+                             }
+                         } );
     }
 
     void onRemoveSearchDirectory( wxCommandEvent& )
@@ -164,6 +171,27 @@ public:
     }
 
 private:
+    void onBrowseButtonClicked( wxCommandEvent& inOutEvent )
+    {
+
+    }
+
+    std::optional<wxString> openDirectory()
+    {
+        std::optional<wxString> result;
+
+        constexpr int style = wxDD_DEFAULT_STYLE | wxDD_DIR_MUST_EXIST;
+
+        wxDirDialog dlg( this, "Choose Directory", wxEmptyString, style );
+
+        if( dlg.ShowModal() == wxID_OK )
+        {
+            result = dlg.GetPath();
+        }
+
+        return result;
+    }
+
     void OnHello( wxCommandEvent& )
     {
     }
