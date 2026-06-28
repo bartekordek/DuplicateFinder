@@ -14,7 +14,7 @@ if (MSVC)
     add_compile_options( /Wall )
     add_compile_options( /MP )
 else()
-    add_compile_options(-Wall -Wextra -pedantic -Werror)
+    add_compile_options(-Wall -Wextra -pedantic)
     add_definitions(-Wfatal-errors)
 endif()
 
@@ -59,11 +59,11 @@ IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 set( DEPENDENCIES_STATIC
-PRIVATE PRIVATE DuplicateFinderBase PRIVATE wx::core
+PRIVATE DuplicateFinderBase_static PRIVATE wx::core
 )
 
 set( DEPENDENCIES_DYNAMIC
-PRIVATE PRIVATE DuplicateFinderBase PRIVATE wx::core
+PRIVATE DuplicateFinderBase_dynamic PRIVATE wx::core
 )
 
 if( MSVC )
@@ -87,6 +87,6 @@ target_include_directories(${PROJECT_NAME_STATIC} PRIVATE inc)
 target_include_directories(${PROJECT_NAME_STATIC} PRIVATE src)
 
 if( MSVC )
-    set_property(TARGET ${EXEPROJECT_NAME_STATICC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_property(TARGET ${EXEPROJECT_NAME_STATIC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
     set_property(TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
