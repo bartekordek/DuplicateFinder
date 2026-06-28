@@ -74,17 +74,11 @@ IF(NOT APPLE AND NOT MSVC)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 ENDIF()
 set( DEPENDENCIES_STATIC
-PRIVATE gameengine_static
-PRIVATE AdditionalDeps
-PRIVATE DuplicateFinderBase
-nfd
+PRIVATE DuplicateFinderBase_static
 )
 
 set( DEPENDENCIES_DYNAMIC
-PRIVATE gameengine_dynamic
-PRIVATE AdditionalDeps
-PRIVATE DuplicateFinderBase
-nfd
+PRIVATE DuplicateFinderBase_dynamic
 )
 
 if( MSVC )
@@ -108,6 +102,6 @@ target_include_directories(${PROJECT_NAME_STATIC} PRIVATE inc)
 target_include_directories(${PROJECT_NAME_STATIC} PRIVATE src)
 
 if( MSVC )
-    set_property(TARGET ${EXEPROJECT_NAME_STATICC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_property(TARGET ${EXEPROJECT_NAME_STATIC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
     set_property(TARGET ${PROJECT_NAME_DYNAMIC} PROPERTY "VS_DEBUGGER_WORKING_DIRECTORY" "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
